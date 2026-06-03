@@ -35,6 +35,10 @@ MIT (same as original).
 
 Upstream: https://github.com/tobi/qmd (the source of truth for behavior).
 
+Repo: https://github.com/readall/qmcoxide (this Rust port).
+
+Note: After git clone, run `cargo check` or `cargo build` to (re)generate Cargo.lock and fetch deps (lock may be environment-specific or updated).
+
 ## Windows Dev Note (this env)
 `cargo check --bin qmd` succeeds. Full `cargo build/run` may hit MSVC `link.exe` shadowing if scoop/coreutils or similar puts a `link` in PATH before the real MSVC linker (common). Use check for validation until clean linker available. No new software was installed.
 

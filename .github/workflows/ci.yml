@@ -26,6 +26,8 @@ jobs:
       - name: Cargo test (lib + bins + tests)
         run: cargo test --all
 
-      # TODO: add clippy, smoke (cargo install --path . ; qmd --version ; small fixture cycle), cross compile if needed.
-      # Expand with original matrix ideas + container smoke when fixtures ready.
-      # See plan.md for full CI requirements (include windows unlike original TS CI).
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # TODO: smoke (cargo install --path . ; qmd --version ; small fixture cycle with gherkin or test), cross, container.
+      # See docs/verification.md and plan.md (full CI: windows included, parity with original qmd).
