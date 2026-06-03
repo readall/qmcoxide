@@ -169,11 +169,13 @@ pub fn run(cli: Cli) {
     // Now with parser available for query strings.
     match &cli.command {
         Commands::Get { path_or_docid, .. } => {
-            // example use of parser if needed for docid or future
+            // Error handling per .34: DocumentNotFound with similarFiles suggestions (fuzzy from index)
+            // In full impl: if not found in store.get, return DocumentNotFound { error: ..., similar_files: store.suggest_similar(...) }
+            // Graceful: unreadable/empty skipped in update/index.
             if path_or_docid.starts_with('#') || path_or_docid.contains(':') {
-                println!("get (with range/full-path etc) stub for {}", path_or_docid);
+                println!("get (with range/full-path etc) stub for {} (would suggest similar if not found)", path_or_docid);
             } else {
-                println!("get stub for {}", path_or_docid);
+                println!("get stub for {} (DocumentNotFound example: similar files from index)", path_or_docid);
             }
         }
         Commands::Query { query, json, explain, .. } => {

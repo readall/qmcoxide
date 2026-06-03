@@ -39,6 +39,7 @@ impl Store {
         if let Ok(entries) = glob(&pat) {
             for entry in entries.filter_map(|e| e.ok()) {
                 if let Ok(content) = std::fs::read_to_string(&entry) {
+                    if content.trim().is_empty() { continue; } // graceful skip empty
                     let chunks = crate::chunk::chunk_document(&content, crate::chunk::ChunkStrategy::Regex);
                     let doc_hash = make_docid(&content);
                     let title = content.lines().next().unwrap_or("").trim_start_matches('#').trim().to_string();
@@ -98,6 +99,19 @@ impl Store {
         // For now, since vec0 load stub and embeddings in embed, return empty.
         // When ready: normalize 1 / (1 + distance) or as per score-fusion.
         vec![]
+    }
+
+    /// Suggest similar files/paths for error messages (fuzzy from index, e.g. contains).
+    /// Per task .34, requirements "DocumentNotFound + similar suggestions", retrieval/CLI errors.
+    pub fn suggest_similar(&self, bad: &str, _collection: Option<&str>) -> Vec<String> {
+        let like = format!("%{}%", bad);
+        let mut stmt = self.db.prepare(
+            "SELECT path FROM documents WHERE path LIKE ? LIMIT 5"
+        ).expect("prepare suggest");
+        stmt.query_map(params![&like], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<String>, _>>()
+            .unwrap_or_default()
     }
 }
 
