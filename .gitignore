@@ -1,0 +1,9 @@
+/target
+**/*.rs.bk
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store
+*.log
+# For tests/fixtures if large
+# eval data etc if added

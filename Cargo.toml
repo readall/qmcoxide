@@ -1,0 +1,57 @@
+[package]
+name = "qmcoxide"
+version = "0.1.0"
+edition = "2021"
+description = "qmd - Query Markup Documents (Rust port) - On-device hybrid search for markdown and knowledge bases with BM25 + vector + LLM reranking"
+authors = ["Tobi Lutke (original) / qmcoxide port"]
+license = "MIT"
+repository = "https://github.com/tobi/qmd"  # upstream; update when repo created
+keywords = ["markdown", "search", "fts", "vector", "semantic-search", "sqlite", "bm25", "embeddings", "rag", "mcp", "reranking", "local-ai", "llm", "rust"]
+categories = ["command-line-utilities", "text-processing"]
+
+[[bin]]
+name = "qmd"
+path = "src/main.rs"
+
+[lib]
+name = "qmcoxide"
+path = "src/lib.rs"  # public SDK surface (QMDStore equivalent) - to be implemented
+
+[dependencies]
+# Core (chosen per plan analysis; versions approximate current stable as of 2026)
+rusqlite = { version = "0.32", features = ["bundled", "modern_sqlite"] }  # FTS5 support via build
+# sqlite-vec extension loaded at runtime (see db.rs); alternative tantivy for pure-Rust vec/fts in future spike
+clap = { version = "4.5", features = ["derive", "env", "cargo"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+thiserror = "1.0"
+anyhow = "1.0"
+indicatif = "0.17"
+colored = "2"
+regex = "1"
+sha2 = "0.10"  # for content hashes / docids
+dirs = "5"  # XDG cache/config (~/.cache/qmd , ~/.config/qmd per compat decision)
+glob = "0.3"  # collection patterns (picomatch-like)
+# tree-sitter = "0.24"  # + tree-sitter-* for AST chunking (ts,py,go,rs,js) - optional, gated
+# For LLM: TBD after spike (llama-cpp-2 / kalosm / candle + gguf). See plan.
+# hf-hub = { version = "0.3", features = ["ureq"] }  # model downloads from HF (same URIs)
+
+# MCP support (TBD crate choice after spike: rmcp, mcp-sdk, or custom with serde_json + stdio/axum for HTTP)
+# tokio = { version = "1", features = ["full"] }
+# axum = "0.7"  # for HTTP transport
+# serde_json = "1"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+# cucumber = "0.21"  # or use gherkin crate + custom runner for specs/features/*.feature
+insta = "1"  # for output snapshots
+
+[features]
+default = []
+# sqlite-vec = []  # if bundling extension
+# ast-chunk = ["tree-sitter", "tree-sitter-typescript", "tree-sitter-python", "tree-sitter-go", "tree-sitter-rust"]  # optional
+
+# See plan.md (in session or DESIGN.md) for full crate decisions, spikes (LLM, vec backend), port order, and verification.
+# Run `cargo add <crate>` or edit here + cargo update as needed during impl.
