@@ -38,6 +38,8 @@ impl Store {
         let pat = format!("{}/{} ", root.trim_end_matches('/'), pattern);
         if let Ok(entries) = glob(&pat) {
             for entry in entries.filter_map(|e| e.ok()) {
+                let path_str = entry.to_string_lossy().to_string();
+                if path_str.contains("/.git/") || path_str.ends_with("/.gitignore") { continue; } // basic .gitignore + git skip (full .gitignore parse in glob task)
                 if let Ok(content) = std::fs::read_to_string(&entry) {
                     if content.trim().is_empty() { continue; } // graceful skip empty
                     let chunks = crate::chunk::chunk_document(&content, crate::chunk::ChunkStrategy::Regex);
