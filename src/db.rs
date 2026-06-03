@@ -12,6 +12,8 @@ use rusqlite::{Connection, Result};
 /// Open DB, enable extensions, load vec if possible (for fidelity with original vec0).
 pub fn open_database(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)?;
+    // PRAGMAs for durability/performance parity with original (WAL, etc.)
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;")?;
     // Enable extension loading for sqlite-vec (rusqlite bundled supports).
     // Note: for some platforms, may need conn.load_extension with path to libsqlite_vec.so/dylib/dll
     // See load_sqlite_vec below for hints (port of original mac Homebrew etc).
@@ -22,6 +24,8 @@ pub fn open_database(path: &str) -> Result<Connection> {
     if let Err(e) = load_sqlite_vec(&conn) {
         eprintln!("Warning: could not load sqlite-vec extension (vec search disabled): {}. Install platform sqlite-vec or build ext.", e);
     }
+    // Run migrations for legacy (path fixes, fp cols, vec dim, case from changelog implicit reqs)
+    run_migrations(&conn)?;
     Ok(conn)
 }
 
@@ -38,7 +42,6 @@ pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
 /// Migrations TODO for legacy (path fixes, fingerprints etc from changelog).
 pub fn init_schema(conn: &Connection) -> Result<()> {
-    // content for doc bodies/chunks?
     conn.execute_batch(r#"
         CREATE TABLE IF NOT EXISTS content (
             hash TEXT PRIMARY KEY,
@@ -51,12 +54,26 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             hash TEXT,
             title TEXT,
             active INTEGER DEFAULT 1,
-            last_modified TEXT
+            last_modified TEXT,
+            fingerprint TEXT,
+            last_embed_at INTEGER
         );
         CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
             name, body, path, tokenize='unicode61'
         );
-        -- vectors_vec created after knowing dim in embed (see original vec0 usage)
+        CREATE TABLE IF NOT EXISTS chunks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            doc_hash TEXT NOT NULL,
+            seq INTEGER,
+            start_line INTEGER,
+            end_line INTEGER,
+            content TEXT,
+            token_count INTEGER,
+            fingerprint TEXT,
+            chunk_strategy TEXT
+        );
+        -- vectors_vec VIRTUAL vec0 created dynamically in embed (after knowing dim, e.g. 768 or model specific)
+        -- CREATE VIRTUAL TABLE IF NOT EXISTS vectors_vec USING vec0(hash_seq TEXT PRIMARY KEY, embedding FLOAT[768] distance_metric=cosine);
         CREATE TABLE IF NOT EXISTS path_contexts (
             collection TEXT,
             path TEXT,
@@ -74,11 +91,31 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             key TEXT PRIMARY KEY,
             value TEXT
         );
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY
+        );
     "#)?;
 
-    // Note: vectors_vec is VIRTUAL vec0, created in embed code with dim e.g. 768
-    // CREATE VIRTUAL TABLE IF NOT EXISTS vectors_vec USING vec0(hash_seq TEXT PRIMARY KEY, embedding float[768] distance_metric=cosine);
+    Ok(())
+}
 
+/// Basic migrations for legacy indexes (path fixes, fp columns, vec dim, case from CHANGELOG implicit + requirements).
+/// Run on every open; use simple ALTER IF NOT EXISTS pattern (or catch).
+pub fn run_migrations(conn: &Connection) -> Result<()> {
+    // Simple versioned mig (extend as needed)
+    let current: i32 = conn.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |r| r.get(0)).unwrap_or(0);
+
+    if current < 1 {
+        // Example: add fp columns if missing (for legacy)
+        let _ = conn.execute("ALTER TABLE documents ADD COLUMN fingerprint TEXT", []);
+        let _ = conn.execute("ALTER TABLE documents ADD COLUMN last_embed_at INTEGER", []);
+        conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (1)", [])?;
+    }
+    if current < 2 {
+        // vec dim or other; in practice recreate virtual if needed in embed path
+        conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (2)", [])?;
+    }
+    // Add more for path verbatim fixes, case etc. (data fixups if needed)
     Ok(())
 }
 
@@ -101,9 +138,10 @@ mod tests {
             .unwrap()
             .collect::<Result<_, _>>()
             .unwrap();
-        assert!(tables.iter().any(|t| t.contains("documents")));
-        assert!(tables.iter().any(|t| t.contains("documents_fts")));
-        assert!(tables.iter().any(|t| t.contains("store_collections")));
-        // vec table created later in embed with dim
+        for exp in ["content", "documents", "documents_fts", "chunks", "path_contexts", "store_collections", "llm_cache", "schema_migrations"] {
+            assert!(tables.iter().any(|t| t.contains(exp)), "missing table: {}", exp);
+        }
+        // vectors_vec is virtual, created on demand in embed (with dim); FTS/vec queries exercised in higher tests
+        // run_migrations called in open (test uses init directly)
     }
 }
