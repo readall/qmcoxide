@@ -32,15 +32,28 @@ regex = "1"
 sha2 = "0.10"  # for content hashes / docids
 dirs = "5"  # XDG cache/config (~/.cache/qmd , ~/.config/qmd per compat decision)
 glob = "0.3"  # collection patterns (picomatch-like)
-# tree-sitter = "0.24"  # + tree-sitter-* for AST chunking (ts,py,go,rs,js) - optional, gated
+
+# For model downloads from HF (exact GGUF URIs for embed/rerank/expand parity with original qmd; cache ~/.cache/qmd/models)
+# Always included (core for LLM parity); gated features are for ast-chunk and mcp.
+hf-hub = { version = "0.3" }
+
 # For LLM: chose llama-cpp-2 (closest parity to node-llama-cpp / llama.cpp used in original qmd; supports GGUF, embed, chat, sampling for rerank/expand, GPU backends via features).
 llama-cpp-2 = { version = "0.1", features = ["cuda", "vulkan", "metal"] }  # GPU; may need to adjust per platform (see spike notes)
-# hf-hub = { version = "0.3", features = ["ureq"] }  # model downloads from HF (same URIs)
 
-# MCP support (TBD crate choice after spike: rmcp, mcp-sdk, or custom with serde_json + stdio/axum for HTTP)
-# tokio = { version = "1", features = ["full"] }
-# axum = "0.7"  # for HTTP transport
-# serde_json = "1"
+# For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
+# Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
+tree-sitter = { version = "0.22", optional = true }
+tree-sitter-rust = { version = "0.21", optional = true }
+tree-sitter-python = { version = "0.21", optional = true }
+tree-sitter-go = { version = "0.21", optional = true }
+tree-sitter-typescript = { version = "0.21", optional = true }
+tree-sitter-javascript = { version = "0.21", optional = true }
+
+# For MCP server (stdio default + --http Streamable HTTP daemon/PID/health per mcp.feature and requirements)
+# Using axum+tokio+serde_json for custom impl (rmcp alternative possible after spike)
+tokio = { version = "1", features = ["full"], optional = true }
+axum = { version = "0.7", optional = true }
+serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2"
@@ -52,7 +65,19 @@ insta = "1"  # for output snapshots
 [features]
 default = []
 # sqlite-vec = []  # if bundling extension
-# ast-chunk = ["tree-sitter", "tree-sitter-typescript", "tree-sitter-python", "tree-sitter-go", "tree-sitter-rust"]  # optional
+ast-chunk = [
+  "dep:tree-sitter",
+  "dep:tree-sitter-rust",
+  "dep:tree-sitter-python",
+  "dep:tree-sitter-go",
+  "dep:tree-sitter-typescript",
+  "dep:tree-sitter-javascript"
+]  # optional, for AST chunking in code files (see chunking.feature + chunking.md)
+mcp = ["dep:tokio", "dep:axum", "dep:serde_json"]  # for stdio + HTTP daemon (see mcp.feature)
+
+# hf-hub, tree-sitter*, tokio/axum/serde_json are optional and activated via features above for full parity.
+# llama-cpp-2 remains active (core for embed/rerank/expand per requirements "Models").
 
 # See plan.md (in session or DESIGN.md) for full crate decisions, spikes (LLM, vec backend), port order, and verification.
 # Run `cargo add <crate>` or edit here + cargo update as needed during impl.
+# After edit: cargo check --features ast-chunk,mcp (modulo native link issues on some Windows envs)
