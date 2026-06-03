@@ -5,7 +5,7 @@ edition = "2021"
 description = "qmd - Query Markup Documents (Rust port) - On-device hybrid search for markdown and knowledge bases with BM25 + vector + LLM reranking"
 authors = ["Tobi Lutke (original) / qmcoxide port"]
 license = "MIT"
-repository = "https://github.com/tobi/qmd"  # upstream; update when repo created
+repository = "https://github.com/readall/qmcoxide"  # this Rust port; upstream https://github.com/tobi/qmd for behavioral spec
 keywords = ["markdown", "search", "fts", "vector", "semantic-search", "sqlite", "bm25", "embeddings", "rag", "mcp", "reranking", "local-ai", "llm", "rust"]
 categories = ["command-line-utilities", "text-processing"]
 
@@ -33,7 +33,8 @@ sha2 = "0.10"  # for content hashes / docids
 dirs = "5"  # XDG cache/config (~/.cache/qmd , ~/.config/qmd per compat decision)
 glob = "0.3"  # collection patterns (picomatch-like)
 # tree-sitter = "0.24"  # + tree-sitter-* for AST chunking (ts,py,go,rs,js) - optional, gated
-# For LLM: TBD after spike (llama-cpp-2 / kalosm / candle + gguf). See plan.
+# For LLM: chose llama-cpp-2 (closest parity to node-llama-cpp / llama.cpp used in original qmd; supports GGUF, embed, chat, sampling for rerank/expand, GPU backends via features).
+llama-cpp-2 = { version = "0.1", features = ["cuda", "vulkan", "metal"] }  # GPU; may need to adjust per platform (see spike notes)
 # hf-hub = { version = "0.3", features = ["ureq"] }  # model downloads from HF (same URIs)
 
 # MCP support (TBD crate choice after spike: rmcp, mcp-sdk, or custom with serde_json + stdio/axum for HTTP)

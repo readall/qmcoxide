@@ -15,7 +15,7 @@ Goal: faithful behavioral port in Rust for native packaging (single bin + model 
 - **Index**: clean break / new index only (per decision); still use qmd cache dir for co-existence during transition.
 - **Project**: Cargo bin (qmd) + lib (qmcoxide for SDK). Layout: src/main.rs, src/lib.rs (pub mods: config, db, chunk, llm, store, mcp, cli, paths, maintenance, types), specs/features/*.feature , docs/* (requirements, SYNTAX, fusion, chunking, data-model, architecture, verification, DESIGN, convo placeholder)
 - **XDG** via dirs crate.
-- **Core tech** (to spike/validate): rusqlite (+bundled FTS5), sqlite-vec runtime load (or tantivy alt), clap (full derive), serde_yaml, tree-sitter+grammars (optional feature for AST), hf-hub/ureq for models, llama.cpp binding (llama-cpp-2 or equiv for GGUF embed/rerank/chat + GPU parity: metal/cuda/vulkan + envs), thiserror/anyhow, indicatif/colored for UX, regex/sha2/dirs/glob.
+- **Core tech** (to spike/validate): rusqlite (+bundled FTS5), sqlite-vec runtime load (or tantivy alt), clap (full derive), serde_yaml, tree-sitter+grammars (optional feature for AST), hf-hub/ureq for models, llama.cpp binding (chose llama-cpp-2 for GGUF embed/rerank/chat + GPU parity: metal/cuda/vulkan + envs; see spike), thiserror/anyhow, indicatif/colored for UX, regex/sha2/dirs/glob.
 - **MCP**: TBD crate (rmcp etc) or custom (json + axum for HTTP).
 - **No Node/Bun/TSX/launcher complexity**.
 - **Gherkin first** (cucumber or gherkin+assert_cmd/insta): cover every behavior + edges from tests/CHANGELOG (path fidelity critical, intent, structured queries, doctor, bench, output parity, etc.).
