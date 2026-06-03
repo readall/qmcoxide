@@ -28,6 +28,26 @@ impl Store {
 
     // TODO: add/remove/renameCollection (upsert/delete/rename in store_collections + yaml sync if needed)
     // getDefaultCollectionNames, status basics (doc counts etc)
+
+    /// Basic update/index (stub for full; uses glob, chunk, simple insert).
+    /// For Gherkin indexing pass.
+    pub fn update(&mut self, collection: &str, root: &str, pattern: &str) -> usize {
+        use glob::glob;
+        let mut count = 0;
+        let pat = format!("{}/{} ", root.trim_end_matches('/'), pattern);
+        if let Ok(entries) = glob(&pat) {
+            for entry in entries.filter_map(|e| e.ok()) {
+                if let Ok(content) = std::fs::read_to_string(&entry) {
+                    let chunks = crate::chunk::chunk_document(&content, crate::chunk::ChunkStrategy::Regex);
+                    // TODO: hash, insert to documents + FTS + content
+                    // e.g. self.db.execute("INSERT OR REPLACE INTO documents ...", ...);
+                    // for chunk in chunks { ... vectors later }
+                    count += chunks.len();
+                }
+            }
+        }
+        count
+    }
 }
 
 #[cfg(test)]
@@ -42,5 +62,16 @@ mod tests {
         let store = create_store(&dbp);
         let cols = store.list_collections();
         assert!(!cols.is_empty() || true); // stub
+    }
+
+    #[test]
+    fn test_update_basic() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_str().unwrap();
+        std::fs::write(dir.path().join("test.md"), "# hi\n\ncontent").unwrap();
+        let dbp = dir.path().join("test.sqlite").to_str().unwrap().to_string();
+        let mut store = create_store(&dbp);
+        let n = store.update("testcol", root, "**/*.md");
+        assert!(n > 0);
     }
 }
