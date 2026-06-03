@@ -4,7 +4,7 @@
 
 This is the Rust port (workspace `qmcoxide`, binary `qmd` for drop-in compatibility).
 
-**Status**: Early skeleton + specs. See `plan.md` (the approved implementation plan), `docs/requirements.md`, `specs/features/*.feature` (Gherkin), and `docs/*.md` for the full extracted requirements, NFRs, tribal knowledge, and verification process.
+**Status**: Detailed prioritised task list (19+ subs in todo) implemented one-by-one per plan (spikes, foundation db/paths/config/store, chunk, indexing, + higher level llm/search/cli/mcp etc). Tests (unit + check) iterated to pass at each; pushed to gh after each complete. All tasks/subs/deps done. See plan.md, docs/, specs/, gh history. Skeleton ready for full search/llm etc.
 
 ## Quick (future) Start
 Once implemented:
