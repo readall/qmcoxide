@@ -38,7 +38,7 @@ glob = "0.3"  # collection patterns (picomatch-like)
 hf-hub = { version = "0.3" }
 
 # For LLM: chose llama-cpp-2 (closest parity to node-llama-cpp / llama.cpp used in original qmd; supports GGUF, embed, chat, sampling for rerank/expand, GPU backends via features).
-llama-cpp-2 = { version = "0.1", features = ["cuda", "vulkan", "metal"] }  # GPU; may need to adjust per platform (see spike notes)
+llama-cpp-2 = { version = "0.1", features = ["metal"] }  # GPU; pick one backend (metal/cuda/vulkan) or conditional; all three conflict in build.rs. See spike notes, README Windows note, AGENTS. For full multi, use separate builds or runtime probe.
 
 # For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
 # Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
