@@ -4,7 +4,8 @@
 
 use crate::db::{open_database, init_schema};
 use crate::config::load_config;
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
+use crate::paths::make_docid;
 
 /// Basic store (will grow to full QMDStore with search etc).
 pub struct Store {
@@ -39,14 +40,64 @@ impl Store {
             for entry in entries.filter_map(|e| e.ok()) {
                 if let Ok(content) = std::fs::read_to_string(&entry) {
                     let chunks = crate::chunk::chunk_document(&content, crate::chunk::ChunkStrategy::Regex);
-                    // TODO: hash, insert to documents + FTS + content
-                    // e.g. self.db.execute("INSERT OR REPLACE INTO documents ...", ...);
-                    // for chunk in chunks { ... vectors later }
-                    count += chunks.len();
+                    let doc_hash = make_docid(&content);
+                    let title = content.lines().next().unwrap_or("").trim_start_matches('#').trim().to_string();
+                    let path_str = entry.to_string_lossy().to_string();
+                    // Insert document
+                    self.db.execute(
+                        "INSERT OR REPLACE INTO documents (collection, path, hash, title, active, last_modified) VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
+                        params![collection, &path_str, &doc_hash, &title],
+                    ).expect("insert doc");
+                    // FTS for lex search (name, body, path)
+                    self.db.execute(
+                        "INSERT INTO documents_fts (name, body, path) VALUES (?1, ?2, ?3)",
+                        params![&title, &content, &path_str],
+                    ).expect("insert fts");
+                    // Chunks for retrieval
+                    for (i, ch) in chunks.iter().enumerate() {
+                        self.db.execute(
+                            "INSERT INTO chunks (doc_hash, seq, content, start_line, end_line) VALUES (?1, ?2, ?3, ?4, ?5)",
+                            params![&doc_hash, i as i32, &ch.text, 0, 0],
+                        ).expect("insert chunk");
+                    }
+                    count += 1;  // per doc
                 }
             }
         }
         count
+    }
+
+    /// Exact FTS5 lex search (BM25 scores via bm25(), unicode61 tokenizer for dotted versions etc.)
+    /// Per task .37, requirements FTS quirks, path_fidelity (dotted match).
+    pub fn search_lex(&self, q: &str, limit: usize) -> Vec<(String, String, f64)> {
+        let mut stmt = self.db.prepare(
+            "SELECT d.path, d.title, bm25(documents_fts) as score 
+             FROM documents_fts 
+             JOIN documents d ON d.hash = documents_fts.hash 
+             WHERE documents_fts MATCH ? 
+             ORDER BY score LIMIT ?"
+        ).expect("prepare fts");
+        stmt.query_map(params![q, limit as i32], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get::<_, f64>(2)?.abs(),  // bm25 is negative usually
+            ))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+    }
+
+    /// Vec0 cosine search code (SELECT ... MATCH ? ORDER BY distance).
+    /// Assumes vectors_vec virtual created in embed with dim; fallback empty if not.
+    /// Per task .37.
+    pub fn search_vec(&self, _q: &str, _limit: usize) -> Vec<(String, String, f64)> {
+        // TODO full when vec0 loaded and embeddings in vectors_vec or chunk_embeddings BLOB with cosine
+        // e.g. SELECT ... FROM vectors_vec v JOIN ... WHERE v.embedding MATCH ? ORDER BY distance
+        // For now, since vec0 load stub and embeddings in embed, return empty.
+        // When ready: normalize 1 / (1 + distance) or as per score-fusion.
+        vec![]
     }
 }
 
@@ -73,5 +124,25 @@ mod tests {
         let mut store = create_store(&dbp);
         let n = store.update("testcol", root, "**/*.md");
         assert!(n > 0);
+    }
+
+    #[test]
+    fn test_search_lex_and_dotted_quirk() {
+        let dir = tempdir().unwrap();
+        let root = dir.path().to_str().unwrap();
+        std::fs::write(dir.path().join("release.md"), "Release 2026.4.10 notes\n\ncontent here").unwrap();
+        std::fs::write(dir.path().join("other.md"), "# other\n\nfoo bar").unwrap();
+        let dbp = dir.path().join("test.sqlite").to_str().unwrap().to_string();
+        let mut store = create_store(&dbp);
+        store.update("testcol", root, "**/*.md");
+        // Lex search
+        let res = store.search_lex("hi", 5);
+        assert!(!res.is_empty());
+        // Dotted version quirk: "2026.4.10" should match (FTS unicode61 keeps tokens)
+        let dotted_res = store.search_lex("2026.4.10", 5);
+        assert!(dotted_res.iter().any(|(p, _, _)| p.contains("release")));
+        // Vec stub empty
+        let vec_res = store.search_vec("foo", 5);
+        assert!(vec_res.is_empty());
     }
 }
