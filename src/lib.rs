@@ -10,6 +10,8 @@ pub mod store;    // core: Store, indexing/reindex, search (lex/vec/hybrid), fus
 pub mod mcp;      // MCP server (stdio + HTTP daemon), tool impls matching contract (query/get/multi_get/status)
 pub mod cli;      // CLI parser (clap), commands, formatters (json/csv/md/xml/files/explain/full-path), progress, hyperlinks, doctor etc.
 pub mod paths;    // qmd:// handling, docid, path fidelity (verbatim, NFC, case)
+pub mod syntax;   // formal SYNTAX EBNF parser for structured queries (intent/lex/vec/hyde/expand + lex ops) per SYNTAX.md
+pub use syntax::{parse_query, Query, LexTerm};
 pub mod maintenance; // vacuum, cleanup orphans, etc.
 
 pub mod types;    // Shared types, errors, progress, results (DocumentResult, HybridQueryResult, etc.)
@@ -20,3 +22,4 @@ pub mod types;    // Shared types, errors, progress, results (DocumentResult, Hy
 pub use store::StorePlaceholder as QMDStore;  // TODO: real impl + create_store fn
 
 // TODO: re-export key types, utils like extract_snippet, add_line_numbers, DEFAULT_*, Maintenance
+
