@@ -1,13 +1,18 @@
 //! DB layer: rusqlite (or bun equiv but Rust), open, schema creation + migrations (for legacy indexes: path fixes, fingerprints, etc), FTS5, vec0 extension load, prepared stmts.
 //! Cross platform sqlite (system or bundled).
 //! See original src/db.ts (compat layer), store.ts for CREATEs, migrate-schema.ts , data-model.md .
+//!
+//! Vec backend spike decision (task 2): chose sqlite-vec extension load for fidelity (exact same vec0 virtual table, cosine, SQL as original qmd for vectors_vec; matches FTS5 docs/fts behavior, RRF etc without reimpl).
+//! Alternative tantivy considered for pure-Rust (no native ext, easier win/cross packaging, but would require reimpl of vec search + fusion parity work).
+//! Load similar to original: find platform lib (e.g. via build or bundled), conn.load_extension(path).
+//! (No direct "sqlite-vec" load crate in Rust equiv to npm; use std::env or include_bytes for prebuilts in future.)
 
 use rusqlite::{Connection, Result};
 
 pub fn open_database(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)?;
-    // TODO: load extension for vec if available (platform hints like Homebrew on mac)
-    // conn.load_extension...
+    // TODO (spike done): load extension for vec if available (platform hints like Homebrew on mac for original; see load_sqlite_vec)
+    // load_sqlite_vec(&conn)?;
     Ok(conn)
 }
 
@@ -17,4 +22,4 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-// TODO: load_sqlite_vec, transaction helpers, specific queries for fts, vec, etc.
+// TODO: load_sqlite_vec (extension load with error hints), transaction helpers, specific queries for fts, vec, etc.
