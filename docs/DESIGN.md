@@ -26,6 +26,8 @@ Goal: faithful behavioral port in Rust for native packaging (single bin + model 
 
 **Current decisions (post-approval ask)**: qmd binary, qmd cache dirs (compat), clean break index.
 
+**Verification (latest)**: Full parity NOT achieved (see docs/verification.md "Current Verification Results" section + todo list gap-P0-01..gap-P2-17 for exhaustive gap catalog from cross of requirements + all 10 *.feature + source reads + cargo attempts). Foundation (phases ~0-8) has basic units; LLM/search/CLI/MCP/retrieval/doctor/bench/exact chunk+index+config are stub level only. No assert_cmd/gherkin/side-by-side yet. Build env link issues on Windows (scoop) block easy full test (doc'd). Resume: pick next gap-P*, impl one-by-one, test iterate, MCP push after green.
+
 **Open (to spike/ask)**: exact LLM crate (llama-cpp-2 preferred for parity), vec backend (sqlite-vec fidelity vs tantivy), full SDK lib scope, release/dist (cargo + gh), convo transcript capture (placeholder in docs/original-conversation.md).
 
 ## Key Specs to Honor

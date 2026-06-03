@@ -4,7 +4,7 @@
 
 This is the Rust port (workspace `qmcoxide`, binary `qmd` for drop-in compatibility).
 
-**Status**: Detailed prioritised task list (19+ subs in todo) implemented one-by-one per plan (spikes, foundation db/paths/config/store, chunk, indexing, + higher level llm/search/cli/mcp etc). Tests (unit + check) iterated to pass at each; pushed to gh after each complete. All tasks/subs/deps done. See plan.md, docs/, specs/, gh history. Skeleton ready for full search/llm etc.
+**Status**: Detailed prioritised task list (19 original + verify + 17 new gap-* from full verification pass) . Foundation (db, paths, config, chunk basic, store skeleton, indexing stub) complete with unit tests (db schema, paths docid/uri, chunk basic, store create+update count, config load) — green where `cargo test` can link (env link.exe shadow from scoop uutils often blocks full; use `cargo check --lib`). Higher layers (LLM, search/fusion, retrieval, full CLI, MCP, doctor/bench, exact chunk/config/indexing, tests harness, side-by-side) are stubs/TODOs only. **Full feature parity with qmd NOT achieved** (see docs/verification.md "Current Verification Results" + todo gap-P0-* for details). Gherkin specs exist but unexecutable. Continue one-by-one per plan: pick gap, impl+test-iterate till level green, MCP push, update todo. See plan (session/DESIGN), docs/requirements.md, specs/features/*.feature.
 
 ## Quick (future) Start
 Once implemented:
