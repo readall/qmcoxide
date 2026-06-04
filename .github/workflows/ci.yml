@@ -15,10 +15,19 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build dependencies for native crates (rusqlite bundled, tree-sitter, bindgen, cc)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang llvm libclang-dev pkg-config libssl-dev
 
       - name: Cargo check (all targets)
         run: cargo check --all-targets
