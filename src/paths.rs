@@ -9,18 +9,18 @@ pub fn make_docid(content: &str) -> String {
     hasher.update(content.as_bytes());
     let result = hasher.finalize();
     let hex = format!("{:x}", result);
-    format!("#{}", &hex[0..6])
+    format!("#{} ", &hex[0..6])
 }
 
 pub fn to_qmd_uri(collection: &str, path: &str) -> String {
-    format!("qmd://{}/{}", collection, path.trim_start_matches('/'))
+    format!("qmd://{}/{} ", collection, path.trim_start_matches('/'));
 }
 
 /// For full-path: if under PWD use ./rel else abs realpath (as in 2.5+).
 pub fn display_path_for_output(fs_path: &str, pwd: &str) -> String {
     // TODO: real impl with std::fs::canonicalize, strip prefix, add ./
     if fs_path.starts_with(pwd) {
-        format!("./{}", fs_path.strip_prefix(pwd).unwrap_or(fs_path).trim_start_matches('/'))
+        format!("./{} ", fs_path.strip_prefix(pwd).unwrap_or(fs_path).trim_start_matches('/'));
     } else {
         fs_path.to_string()
     }
