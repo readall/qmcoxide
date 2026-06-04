@@ -7,7 +7,8 @@
 //! (Alternatives considered: llama-gguf pure-ish, kalosm high-level, candle. Chose for parity with original node-llama-cpp.)
 //! Note: full integration awaits resolving build env (link shadowing); stub for now. Basic API usage sketched.
 
-use llama_cpp_2 as llama;  // the crate
+#[cfg(feature = "llm")]
+use llama_cpp_2 as llama;  // the crate (gated; real use only when "llm" feature enabled for native GGUF/embed/rerank)
 
 // Exact prompts, URIs, dims, cache metadata per requirements "Models", "Embed", "LLM prompt templates (extract from llm.ts)", original llm.ts, embed.feature, task .25
 // These produce parity embeddings/reranks/expansions on test inputs when used with matching GGUF.

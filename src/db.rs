@@ -7,9 +7,10 @@
 //! Load similar to original: find platform lib (e.g. via build or bundled), conn.load_extension(path).
 //! (No direct "sqlite-vec" load crate in Rust equiv to npm; use std::env or include_bytes for prebuilts in future.)
 
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, Result as SqliteResult, params};
+use std::path::Path;
+use anyhow::Result;
 
-/// Open DB, enable extensions, load vec if possible (for fidelity with original vec0).
 pub fn open_database(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)?;
     // PRAGMAs for durability/performance parity with original (WAL, etc.)
@@ -41,7 +42,7 @@ pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
 
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
 /// Migrations TODO for legacy (path fixes, fingerprints etc from changelog).
-pub fn init_schema(conn: &Connection) -> Result<()> {
+pub fn init_schema(conn: &Connection) -> SqliteResult<()> {
     conn.execute_batch(r#"
         CREATE TABLE IF NOT EXISTS content (
             hash TEXT PRIMARY KEY,
@@ -101,7 +102,7 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
 
 /// Basic migrations for legacy indexes (path fixes, fp columns, vec dim, case from CHANGELOG implicit + requirements).
 /// Run on every open; use simple ALTER IF NOT EXISTS pattern (or catch).
-pub fn run_migrations(conn: &Connection) -> Result<()> {
+pub fn run_migrations(conn: &Connection) -> SqliteResult<()> {
     // Simple versioned mig (extend as needed)
     let current: i32 = conn.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |r| r.get(0)).unwrap_or(0);
 
