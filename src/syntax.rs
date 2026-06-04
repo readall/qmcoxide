@@ -127,12 +127,12 @@ vec: how to improve page load times"#;
             assert!(matches!(lex[0], LexTerm::Word(ref s) if s == "performance"));
             assert_eq!(vec, Some("how to improve page load times".to_string()));
             assert!(hyde.is_none());
-        } else { panic!("expected Structured, got {parsed:?} (check parse_query impl vs SYNTAX EBNF)"); }
+        } else { assert!(false, "expected Structured, got {parsed:?} (check parse_query impl vs SYNTAX EBNF)"); }
     }
 
     #[test]
     fn test_lex_negation_and_phrase() {
-        let q = r#"lex: "machine learning" -"deep learning"
+        let q = r#"lex: \"machine learning\" -\"deep learning\"
 lex: auth -oauth -saml"#;
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
@@ -140,7 +140,7 @@ lex: auth -oauth -saml"#;
             assert!(matches!(&lex[1], LexTerm::NegPhrase(s) if s == "deep learning"));
             assert!(matches!(&lex[2], LexTerm::Word(s) if s == "auth"));
             assert!(matches!(&lex[3], LexTerm::NegWord(s) if s == "oauth"));
-        } else { panic!("expected Structured, got {parsed:?}"); }
+        } else { assert!(false, "expected Structured, got {parsed:?}"); }
     }
 
     #[test]
