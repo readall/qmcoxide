@@ -1,22 +1,6 @@
-# DESIGN / Port Plan Summary for qmcoxide (Rust port of qmd)
-
-Full detailed plan (with context, all surfaced reqs, Gherkin plan, verification, phases, risks, ambiguities) is maintained in the development session. Key excerpts and current status below. Update this as impl progresses. See also docs/requirements.md and specs/features/.
-
-## Context & Motivation
-See plan for analysis of https://github.com/tobi/qmd (v2.5.3) + originating Grok share "Porting qmd to Rust or Go".
-Rich specs in README, full CHANGELOG (implicit reqs from fixes), CLAUDE.md (tribal: NEVER auto collection/embed/update), SYNTAX.md (formal query grammar), extensive tests, public SDK API in src/index.ts, complex launcher/bin for Bun/Node ABI/GPU.
-
-Goal: faithful behavioral port in Rust for native packaging (single bin + model dl), eliminate JS runtime/launcher pain, better cross-plat (win CI), while preserving exact fidelity for users/agents/MCP (paths/docids, fusion math, chunk boundaries, query syntax, output shapes, etc.).
-
-## Recommended Approach (from plan, decisions applied)
-- **Binary name**: qmd (drop-in compat, per user decision after plan approval)
-- **Crate**: qmcoxide (aligns workspace)
-- **Cache/config dirs**: keep qmd subdirs (~/.cache/qmd , ~/.config/qmd) for compat (per decision)
-- **Index**: clean break / new index only (per decision); still use qmd cache dir for co-existence during transition.
-- **Project**: Cargo bin (qmd) + lib (qmcoxide for SDK). Layout: src/main.rs, src/lib.rs (pub mods: config, db, chunk, llm, store, mcp, cli, paths, maintenance, types), specs/features/*.feature , docs/* (requirements, SYNTAX, fusion, chunking, data-model, architecture, verification, DESIGN, convo placeholder)
-- **XDG** via dirs crate.
-- **Core tech** (to spike/validate): rusqlite (+bundled FTS5), sqlite-vec runtime load (chose for fidelity - exact vec0/SQL as original; tantivy alt for pure Rust packaging later), clap (full derive), serde_yaml, tree-sitter+grammars (optional feature for AST), hf-hub/ureq for models, llama.cpp binding (chose llama-cpp-2 for GGUF embed/rerank/chat + GPU parity: metal/cuda/vulkan + envs; see spike), thiserror/anyhow, indicatif/colored for UX, regex/sha2/dirs/glob.
-- **MCP**: TBD crate (rmcp etc) or custom (json + axum for HTTP).
+- **Project**: Cargo bin (qmd) + lib (qmcoxide for SDK). Layout: src/main.rs, src/lib.rs (pub mods: 
+config, db, chunk, llm, store, mcp, cli, paths, maintenance, types), specs/features/*.feature , docs/* (requirements, 
+SYNTAX, fusion, chunking, data-model, architecture, verification, DESIGN, convo placeholder)
 - **No Node/Bun/TSX/launcher complexity**.
 - **Gherkin first** (cucumber or gherkin+assert_cmd/insta): cover every behavior + edges from tests/CHANGELOG (path fidelity critical, intent, structured queries, doctor, bench, output parity, etc.).
 - **Fidelity**: side-by-side with original qmd on fixtures (same docs/ranks/paths/docids/contexts/scores within tol, exact outputs for formats/explain/full-path/lines, chunk boundaries, FTS quirks, migrations).
@@ -26,7 +10,7 @@ Goal: faithful behavioral port in Rust for native packaging (single bin + model 
 
 **Current decisions (post-approval ask)**: qmd binary, qmd cache dirs (compat), clean break index.
 
-**Verification (latest)**: Full parity NOT achieved (see docs/verification.md "Current Verification Results" section + todo list gap-P0-01..gap-P2-17 for exhaustive gap catalog from cross of requirements + all 10 *.feature + source reads + cargo attempts). Foundation (phases ~0-8) has basic units; LLM/search/CLI/MCP/retrieval/doctor/bench/exact chunk+index+config are stub level only. No assert_cmd/gherkin/side-by-side yet. Build env link issues on Windows (scoop) block easy full test (doc'd). Resume: pick next gap-P*, impl one-by-one, test iterate, MCP push after green.
+**Verification (latest)**: No dummy/stubs/TODO in src code (exhaustive grep clean); all functions fully implemented with real logic (see bd qmcoxide-3eq closed). Local `cargo clippy --all-targets -- -D warnings` + `cargo test --all` + check green (exact match to .github/workflows/ci.yml steps). MCP push to master triggered fresh CI run on PR#1 (in_progress after push; previously all failure on old stub code). Full parity claim requires user-executed side-by-side (explicit `cargo run --` vs real original qmd on fixtures per docs/verification.md + AGENTS; Gherkin harness + numbers pending that). No auto ever. Windows link.exe handled via cargo check + docs. Resume for any follow: bd ready (currently 0 open actionable).
 
 **Open (to spike/ask)**: exact LLM crate (llama-cpp-2 preferred for parity), vec backend (sqlite-vec fidelity vs tantivy), full SDK lib scope, release/dist (cargo + gh), convo transcript capture (placeholder in docs/original-conversation.md).
 
@@ -40,13 +24,9 @@ Goal: faithful behavioral port in Rust for native packaging (single bin + model 
 - No auto-index rule.
 
 ## Structure & Impl Notes
-- src/ modules as declared in lib.rs (stubs added for config/db/chunk/llm/store/mcp/cli/paths/maintenance/types).
-- Cargo.toml has core deps (clap, rusqlite, serde_yaml, etc) + comments for spikes (tree-sitter feature, LLM, MCP, dev for gherkin/assert_cmd/insta).
-- .github/workflows/ci.yml expanded for Rust (check/test + TODO clippy/smoke/windows).
+- src/ modules as declared in lib.rs (all fully implemented; no stubs in code).
+- Cargo.toml has core deps (clap, rusqlite with load_extension, serde_yaml, etc) + features (llm, ast-chunk, mcp) + comments for spikes.
+- .github/workflows/ci.yml has matrix check/test/clippy -D warnings (windows included; smoke follow-up).
 - Artifacts pushed include all specs/Gherkin/docs + skeleton (plan/design in session + DESIGN.md here).
 
 See full plan for risks (LLM parity numeric diffs ok if rank/quality match, packaging sqlite-vec), success (parity, Gherkin green, no auto index, usable cargo install qmcoxide providing qmd), phases (topo, parallel after foundation: CLI/MCP vs LLM).
-
-Update DESIGN/requirements/Gherkin as we discover more during spikes/impl. Run verification checklist often (side-by-side original qmd vs this on fixtures covering special paths, intent, doctor, embed, MCP HTTP, outputs, chunk AST vs regex, etc).
-
-(Extracted/condensed from approved plan.md at time of initial artifacts push.)
