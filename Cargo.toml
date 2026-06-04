@@ -65,7 +65,7 @@ insta = "1"  # for output snapshots
 [features]
 default = []
 # sqlite-vec = []  # if bundling extension
-llm = ["dep:hf-hub", "dep:llama-cpp-2"]  # gated; core for embed/rerank/expand parity (see requirements "Models", llm.rs, embed.feature). Backend (metal etc) chosen by additional features on llama-cpp-2 or its config when building with --features llm. CI uses plain check (no llm feature) so always clean. Use `cargo check --features llm` locally after PATH fix for native on Windows.
+llm = ["dep:hf-hub", "dep:llama-cpp-2", "llama-cpp-2/static"]  # gated; core for embed/rerank/expand parity (see requirements "Models", llm.rs, embed.feature). Backend (metal etc) chosen by additional features on llama-cpp-2 or its config when building with --features llm. CI uses plain check (no llm feature) so always clean. Use `cargo check --features llm` locally after PATH fix for native on Windows.
 ast-chunk = [
   "dep:tree-sitter",
   "dep:tree-sitter-rust",
