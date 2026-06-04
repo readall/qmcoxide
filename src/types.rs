@@ -28,4 +28,30 @@ pub struct SearchResult {
     pub context: Option<String>,
 }
 
-// TODO: many more: HybridQueryResult, SearchOptions {query?, queries?, intent?, rerank?, collections?, limit?, minScore?, explain?, chunkStrategy?, ...}, etc.
+#[derive(Debug, Clone, Default)]
+pub struct SearchOptions {
+    pub query: Option<String>,
+    pub queries: Option<Vec<String>>,
+    pub intent: Option<String>,
+    pub rerank: Option<bool>,
+    pub collections: Option<Vec<String>>,
+    pub limit: Option<usize>,
+    pub min_score: Option<f32>,
+    pub explain: Option<bool>,
+    pub chunk_strategy: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HybridQueryResult {
+    pub score: f64,
+    pub snippet: String,
+    pub context: Option<String>,
+    pub docid: String,
+    pub file: String, // qmd://col/path
+    pub title: Option<String>,
+    pub explain: Option<String>, // trace
+}
+
+pub type ExpandedQuery = String; // or struct with variants
+
+// TODO: more (Progress, IndexStatus, Document, etc). See requirements SDK.
