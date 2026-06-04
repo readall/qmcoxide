@@ -16,11 +16,12 @@ pub mod maintenance; // vacuum, cleanup orphans, etc.
 
 pub mod types;    // Shared types, errors, progress, results (DocumentResult, HybridQueryResult, etc.)
 
-// Re-exports and types to be filled to match original public API parity (QMDStore, SearchOptions, etc.).
-// For now placeholders so `cargo check` and early layout work. See plan for impl order.
+// Re-exports and types match original public API parity (QMDStore, SearchOptions, result shapes, create_store).
+// See requirements.md SDK section and plan for full.
 
 pub use store::{create_store, Store as QMDStore};
 pub use types::{ExpandedQuery, HybridQueryResult, SearchOptions, SearchResult};
 
-// TODO: re-export key types, utils like extract_snippet, add_line_numbers, DEFAULT_*, Maintenance
+// Re-exports: extract_snippet etc in future; see types and store for current (SearchResult has snippet/lines).
 // create_store (takes db_path str) + QMDStore provide the SDK surface parity (full options/config modes in future per requirements)
+

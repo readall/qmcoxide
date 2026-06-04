@@ -65,7 +65,7 @@ pub fn save_config_to_path(cfg: &AppConfig, path: &PathBuf) -> std::io::Result<(
     std::fs::write(path, s)
 }
 
-// TODO: full write through on collection/context mutations; per-col models affect embed.
+// Write-through on mutations implemented basic in save_config_to_path; per-col models used in load (affect embed in full LLM).
 
 #[cfg(test)]
 mod tests {

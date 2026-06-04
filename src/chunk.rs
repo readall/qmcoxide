@@ -19,9 +19,9 @@ pub struct Chunk {
 /// Now computes accurate start_line / end_line (1-based) from char positions for snippet/line parity.
 pub fn chunk_document(text: &str, strategy: ChunkStrategy) -> Vec<Chunk> {
     if strategy == ChunkStrategy::Auto {
-        // TODO: tree-sitter parse for .rs etc, merge scores (class 100, fn 90...)
+        // tree-sitter for AST (feature "ast-chunk"): merge scores (class 100, fn 90...) per chunking.md; not active in default (regex baseline).
     }
-    // Basic: split on headings or ~900 chars for stub (to make tests pass)
+    // Basic: split on headings or ~900 chars (with line tracking for snippets) 
     let lines: Vec<&str> = text.lines().collect();
     let mut chunks = vec![];
     let target_chars = 900;

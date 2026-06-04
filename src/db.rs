@@ -54,7 +54,8 @@ pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
 }
 
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
-/// Migrations for legacy (path fixes, fingerprints etc from changelog) implemented in run_migrations (v1+).
+/// Migrations for legacy (path fixes, fp columns, vec dim, case from CHANGELOG implicit + requirements).
+/// Run on every open; use simple ALTER IF NOT EXISTS pattern (or catch).
 pub fn init_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(r#"
         CREATE TABLE IF NOT EXISTS content (

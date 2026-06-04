@@ -43,11 +43,11 @@ llama-cpp-2 = { version = "0.1", optional = true }  # GPU backends (metal/cuda/v
 # For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
 # Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
 tree-sitter = { version = "0.22", optional = true }
-tree-sitter-rust = { version = "0.22", optional = true }
-tree-sitter-python = { version = "0.22", optional = true }
-tree-sitter-go = { version = "0.22", optional = true }
-tree-sitter-typescript = { version = "0.22", optional = true }
-tree-sitter-javascript = { version = "0.22", optional = true }
+tree-sitter-rust = { version = "0.23.0", optional = true }
+tree-sitter-python = { version = "0.23.0", optional = true }
+tree-sitter-go = { version = "0.23.0", optional = true }
+tree-sitter-typescript = { version = "0.23.0", optional = true }
+tree-sitter-javascript = { version = "0.23.0", optional = true }
 
 # For MCP server (stdio default + --http Streamable HTTP daemon/PID/health per mcp.feature and requirements)
 # Using axum+tokio+serde_json for custom impl (rmcp alternative possible after spike)

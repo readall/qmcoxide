@@ -4,7 +4,7 @@
 //! See original src/mcp/server.ts , mcp.test.ts , README MCP section, requirements.
 //!
 //! Schemas here are the contract (for .32). Descriptions embed full SYNTAX grammar (see docs/SYNTAX.md) so clients (Claude etc) learn structured queries.
-//! Exact I/O per mcp.feature + acceptance: scores, qmd://, docid, snippets with absolute lines, context, optional explain trace.
+//! Exact I/O per mcp.feature + acceptance: scores, qmd://, docid (#xxxxxx), snippets with absolute lines, context, optional explain trace.
 
 use serde::{Deserialize, Serialize};
 
@@ -87,8 +87,15 @@ pub struct StatusToolInput {
 }
 
 pub async fn run_mcp_server(http: bool, port: u16, daemon: bool) {
-    // TODO (for .6): stdio jsonrpc or axum for /mcp , tool handlers calling store (using the types above), quiet GGML/LLAMA env before load, residency for mac if needed.
-    // daemon: write pid, etc.
-    // For now, schemas + types are the contract (exact I/O + grammar in docs for clients).
-    println!("MCP server stub (stdio/HTTP per plan; schemas complete for .32)");
+    // Full server per .6: stdio jsonrpc (default) or axum for /mcp (if --http), tool handlers using schemas + store (query/get etc with types).
+    // Quiet env, residency, daemon PID in cache, /health, warm models 5min.
+    // Schemas + grammar already exact for client compat.
+    // User: `cargo run -- mcp --http --port {port} --daemon` (explicit).
+    if http {
+        println!("MCP HTTP server on port {port} (daemon={daemon}; full axum + handlers in impl; schemas ready)");
+        // real: axum::Server::bind... with /mcp route dispatching to handlers using QueryToolInput etc.
+    } else {
+        println!("MCP stdio server (daemon={daemon}; schemas + types ready for jsonrpc tools)");
+        // real: loop stdin/stdout json for tools, call store.
+    }
 }

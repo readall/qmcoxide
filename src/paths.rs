@@ -13,7 +13,7 @@ pub fn make_docid(content: &str) -> String {
 }
 
 pub fn to_qmd_uri(collection: &str, path: &str) -> String {
-    format!("qmd://{}/{}", collection, path.trim_start_matches('/'))
+    format!("qmd://{}/{} ", collection, path.trim_start_matches('/'))
 }
 
 /// For full-path: if under PWD use ./rel else abs realpath (as in 2.5+).
@@ -75,9 +75,9 @@ mod tests {
     fn test_special_chars_path_fidelity() {
         // from path_fidelity.feature + changelog fixes
         let cases = vec![
-            "docs/Q1 & Review #1 (final) [v2] à¨¯.md",
+            "docs/Q1 & Review #1 (final) [v2] ð.md",
             "src/lib.rs",
-            "weird name with space . and emoji à¨¯.rs",
+            "weird name with space . and emoji ð.rs",
             "versions/v1.2.3+build.txt",
             "unicode/日本語/ファイル.md",
             "case/Sensitive.CamelCase.rs",
