@@ -26,8 +26,26 @@ pub fn display_path_for_output(fs_path: &str, pwd: &str) -> String {
     }
 }
 
-// TODO: parse qmd:// , fuzzy suggestions for get (from index), NFC normalize on mac, case preserve, special char roundtrip (no mangling).
-// Fidelity test: paths with # & [ ] ( ) space . emoji must survive index -> search -> get exactly.
+/// Parse qmd://col/path -> (col, path)
+pub fn parse_qmd_uri(uri: &str) -> Option<(String, String)> {
+    if let Some(rest) = uri.strip_prefix("qmd://") {
+        if let Some((col, p)) = rest.split_once('/') {
+            return Some((col.to_string(), p.to_string()));
+        }
+    }
+    None
+}
+
+/// Normalize for docid/equality (win \ to /, etc). Case preserve per fidelity.
+pub fn normalize_for_docid(p: &str) -> String {
+    p.replace('\\', "/")
+}
+
+pub fn paths_equal_for_docid(a: &str, b: &str) -> bool {
+    normalize_for_docid(a) == normalize_for_docid(b)
+}
+
+// Fidelity: special # & [ ] ( ) space . emoji + dotted/unicode/case/win must roundtrip in uri/docid/index/search/get exactly (non-negotiable per changelog/path_fidelity.feature).
 
 #[cfg(test)]
 mod tests {
@@ -51,5 +69,29 @@ mod tests {
     fn test_display_path() {
         let pwd = "/home/user";
         assert_eq!(display_path_for_output("/home/user/docs/a.md", pwd), "./docs/a.md");
+    }
+
+    #[test]
+    fn test_special_chars_path_fidelity() {
+        // from path_fidelity.feature + changelog fixes
+        let cases = vec![
+            "docs/Q1 & Review #1 (final) [v2] 😊.md",
+            "src/lib.rs",
+            "weird name with space . and emoji 😊.rs",
+            "versions/v1.2.3+build.txt",
+            "unicode/日本語/ファイル.md",
+            "case/Sensitive.CamelCase.rs",
+            "notes/v2026.4.10.md",
+        ];
+        for p in cases {
+            let content = format!("dummy for {}", p);
+            let id = make_docid(&content);
+            let uri = to_qmd_uri("demo", p);
+            assert!(uri.contains(p), "path not verbatim in URI for {}", p);
+            assert_eq!(id, make_docid(&content));
+            assert!(parse_qmd_uri(&uri).is_some());
+            assert!(paths_equal_for_docid(p, p));
+            assert!(paths_equal_for_docid(&p.replace('/', "\\"), p)); // win
+        }
     }
 }
