@@ -78,7 +78,7 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
                     // parse lex terms: words, "phrase", -neg, -"neg phrase"
                     for cap in lex_term_re().find_iter(rest) {
                         let t = cap.as_str();
-                        if t.starts_with("-\"") {
+                        if t.starts_with("-"") {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::NegPhrase(m[1].to_string()));
                             }
@@ -132,7 +132,7 @@ vec: how to improve page load times"#;
 
     #[test]
     fn test_lex_negation_and_phrase() {
-        let q = r#"lex: \"machine learning\" -\"deep learning\"
+        let q = r#"lex: "machine learning" -"deep learning"
 lex: auth -oauth -saml"#;
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
