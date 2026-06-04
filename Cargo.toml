@@ -1,1 +1,82 @@
-[full current toml]
+[package]
+name = "qmcoxide"
+version = "0.1.0"
+edition = "2021"
+description = "qmd - Query Markup Documents (Rust port) - On-device hybrid search for markdown and knowledge bases with BM25 + vector + LLM reranking"
+authors = ["Tobi Lutke (original) / qmcoxide port"]
+license = "MIT"
+repository = "https://github.com/readall/qmcoxide"  # this Rust port; upstream https://github.com/tobi/qmd for behavioral spec
+keywords = ["markdown", "search", "fts", "vector", "semantic-search", "sqlite", "bm25", "embeddings", "rag", "mcp", "reranking", "local-ai", "llm", "rust"]
+categories = ["command-line-utilities", "text-processing"]
+
+[[bin]]
+name = "qmd"
+path = "src/main.rs"
+
+[lib]
+name = "qmcoxide"
+path = "src/lib.rs"  # public SDK surface (QMDStore equivalent) - to be implemented
+
+[dependencies]
+# Core (chosen per plan analysis; versions approximate current stable as of 2026)
+rusqlite = { version = "0.32", features = ["bundled", "modern_sqlite", "load_extension"] }  # FTS5 + extension load for vec0 (sqlite-vec) fidelity per data-model; see db.rs open_database
+# sqlite-vec extension loaded at runtime (see db.rs); alternative tantivy for pure-Rust vec/fts in future spike
+clap = { version = "4.5", features = ["derive", "env", "cargo"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+thiserror = "1.0"
+anyhow = "1.0"
+indicatif = "0.17"
+colored = "2"
+regex = "1"
+sha2 = "0.10"  # for content hashes / docids
+dirs = "5"  # XDG cache/config (~/.cache/qmd , ~/.config/qmd per compat decision)
+glob = "0.3"  # collection patterns (picomatch-like)
+
+# For model downloads from HF (exact GGUF URIs for embed/rerank/expand parity with original qmd; cache ~/.cache/qmd/models)
+# Gated behind "llm" feature (core for parity but native build on Windows requires clean MSVC link.exe PATH; cargo check --lib succeeds without; see README Windows note, AGENTS).
+hf-hub = { version = "0.3", optional = true }
+
+# For LLM: chose llama-cpp-2 (closest parity to node-llama-cpp / llama.cpp used in original qmd; supports GGUF, embed, chat, sampling for rerank/expand, GPU backends via features).
+llama-cpp-2 = { version = "0.1", optional = true }  # GPU backends (metal/cuda/vulkan/...) selected via the crate's own features when the "llm" feature is enabled (see llm.rs, embed.feature). Base "static" activated via the llm feature below for a working cross-plat default. Do not hardcode Apple "metal" etc at dep level (causes resolution fail in cargo check on CI ubuntu/mac/win). Users wanting accel: `cargo build --features llm` + crate features or env as supported by llama-cpp-2. See AGENTS for Windows link.exe, README.
+
+# For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
+# Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
+tree-sitter = { version = "0.22", optional = true }
+tree-sitter-rust = { version = "0.21", optional = true }
+tree-sitter-python = { version = "0.21", optional = true }
+tree-sitter-go = { version = "0.21", optional = true }
+tree-sitter-typescript = { version = "0.21", optional = true }
+tree-sitter-javascript = { version = "0.21", optional = true }
+
+# For MCP server (stdio default + --http Streamable HTTP daemon/PID/health per mcp.feature and requirements)
+# Using axum+tokio+serde_json for custom impl (rmcp alternative possible after spike)
+tokio = { version = "1", features = ["full"], optional = true }
+axum = { version = "0.7", optional = true }
+serde_json = "1"  # for doctor --json (and mcp); was optional under mcp feature only
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+# cucumber = "0.21"  # or use gherkin crate + custom runner for specs/features/*.feature
+insta = "1"  # for output snapshots
+
+[features]
+default = []
+# sqlite-vec = []  # if bundling extension
+llm = ["dep:hf-hub", "dep:llama-cpp-2"]  # gated; core for embed/rerank/expand parity. No backend features activated at this level (metal etc conflict or not present in 0.1; user can combine or the crate handles via build config/env when --features llm used on supported platform). CI default never enables llm so resolution always clean on all OS. See AGENTS Windows link note.
+ast-chunk = [
+  "dep:tree-sitter",
+  "dep:tree-sitter-rust",
+  "dep:tree-sitter-python",
+  "dep:tree-sitter-go",
+  "dep:tree-sitter-typescript",
+  "dep:tree-sitter-javascript"
+]  # optional, for AST chunking in code files (see chunking.feature + chunking.md)
+mcp = ["dep:tokio", "dep:axum"]  # for stdio + HTTP daemon (see mcp.feature); serde_json now always available (used by doctor --json too)
+
+# hf-hub, llama-cpp-2, tree-sitter*, tokio/axum/serde_json are optional and activated via features above for full parity.
+# See plan.md (in session or DESIGN.md) for full crate decisions, spikes (LLM, vec backend), port order, and verification.
+# Run `cargo add <crate>` or edit here + cargo update as needed during impl.
+# After edit: cargo check --lib (or --features ast-chunk,mcp,llm modulo native link issues on some Windows envs per AGENTS)
