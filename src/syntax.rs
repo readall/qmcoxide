@@ -127,7 +127,7 @@ vec: how to improve page load times"#;
             assert!(matches!(lex[0], LexTerm::Word(ref s) if s == "performance"));
             assert_eq!(vec, Some("how to improve page load times".to_string()));
             assert!(hyde.is_none());
-        } else { assert!(false, "expected Structured, got {parsed:?} (check parse_query impl vs SYNTAX EBNF)"); }
+        } else { panic!("expected Structured, got {parsed:?} (check parse_query impl vs SYNTAX EBNF)"); }
     }
 
     #[test]
@@ -140,7 +140,7 @@ lex: auth -oauth -saml"#;
             assert!(matches!(&lex[1], LexTerm::NegPhrase(s) if s == "deep learning"));
             assert!(matches!(&lex[2], LexTerm::Word(s) if s == "auth"));
             assert!(matches!(&lex[3], LexTerm::NegWord(s) if s == "oauth"));
-        } else { assert!(false, "expected Structured, got {parsed:?}"); }
+        } else { panic!("expected Structured, got {parsed:?}"); }
     }
 
     #[test]
