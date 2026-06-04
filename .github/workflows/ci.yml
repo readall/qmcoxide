@@ -29,6 +29,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential clang llvm libclang-dev pkg-config libssl-dev
 
+      - name: Install build dependencies for macOS (llvm for bindgen, clang for cc)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
       - name: Cargo check (lib)
         run: cargo check --lib
 
