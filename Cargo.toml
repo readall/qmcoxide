@@ -53,7 +53,7 @@ tree-sitter-javascript = { version = "0.21", optional = true }
 # Using axum+tokio+serde_json for custom impl (rmcp alternative possible after spike)
 tokio = { version = "1", features = ["full"], optional = true }
 axum = { version = "0.7", optional = true }
-serde_json = { version = "1", optional = true }
+serde_json = "1"  # for doctor --json (and mcp); was optional under mcp feature only
 
 [dev-dependencies]
 assert_cmd = "2"
@@ -74,7 +74,7 @@ ast-chunk = [
   "dep:tree-sitter-typescript",
   "dep:tree-sitter-javascript"
 ]  # optional, for AST chunking in code files (see chunking.feature + chunking.md)
-mcp = ["dep:tokio", "dep:axum", "dep:serde_json"]  # for stdio + HTTP daemon (see mcp.feature)
+mcp = ["dep:tokio", "dep:axum"]  # for stdio + HTTP daemon (see mcp.feature); serde_json now always available (used by doctor --json too)
 
 # hf-hub, llama-cpp-2, tree-sitter*, tokio/axum/serde_json are optional and activated via features above for full parity.
 # See plan.md (in session or DESIGN.md) for full crate decisions, spikes (LLM, vec backend), port order, and verification.

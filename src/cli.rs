@@ -199,7 +199,7 @@ pub fn run(cli: Cli) {
             CollectionAction::Rename { old, new } => println!("collection rename would call store.rename_collection(\"{}\", \"{}\")", old, new),
         },
         Commands::Mcp { http, port, daemon } => println!("mcp stub http={} port={:?} daemon={}", http, port, daemon),
-        Commands::Doctor { json } => println!("doctor stub json={}", json),
+        Commands::Doctor { json } => crate::maintenance::run_doctor(*json),
         Commands::Bench { fixture, json } => println!("bench stub {} json={}", fixture, json),
         Commands::Ls { prefix } => {
             let p = prefix.as_deref().unwrap_or("");
@@ -208,5 +208,5 @@ pub fn run(cli: Cli) {
         Commands::Other(args) if !args.is_empty() => println!("other/unknown: {:?}", args),
         _ => println!("CLI (full enum + parser now) - see features/*.feature, docs/requirements.md, original qmd cli for parity. Run 'cargo run -- --help' for surface."),
     }
-    // TODO formatters per .30: for json use serde, csv with csv crate later, md/xml manual, --files list paths, explain full trace, OSC8 if tty and QMD_EDITOR_URI set (e.g. format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text) ), colored with colored crate.
+    // TODO formatters per .30: for json use serde, csv with csv crate later, md/xml manual, --files list paths, explain full trace, OSC8 if tty and QMD_EDITOR_URI set (e.g. format!("\x1b]8;;{}\x1b\\{}\x1b\\", url, text) ), colored with colored crate.
 }
