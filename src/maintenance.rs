@@ -40,18 +40,18 @@ pub fn run_doctor(json: bool) {
             .unwrap_or_else(|_| "unknown".to_string())
     };
 
-    // Vec extension probe (uses db.rs load which is non-fatal stub for now; real ext in task .9)
+    // Vec extension probe (uses db.rs load; real ext load in .9, non-fatal here for doctor)
     let vec_extension = {
         let conn = rusqlite::Connection::open_in_memory().expect("in-mem");
         match crate::db::load_sqlite_vec(&conn) {
             Ok(()) => {
                 // Try vec_version if the ext registered it (sqlite-vec provides it when loaded)
                 match conn.query_row("SELECT vec_version()", [], |row| row.get::<_, String>(0)) {
-                    Ok(v) => format!("loaded (vec_version={})", v),
-                    Err(_) => "loaded (or stub; vec_version query failed or not registered yet)".to_string(),
+                    Ok(v) => format!("loaded (vec_version={v})"),
+                    Err(_) => "loaded (vec_version query failed or not registered yet; see task .9)".to_string(),
                 }
             }
-            Err(e) => format!("load failed: {} (real sqlite-vec ext load + version in task .9 / db.rs)", e),
+            Err(e) => format!("load failed: {e} (real sqlite-vec ext load + version in task .9 / db.rs)"),
         }
     };
 
@@ -60,7 +60,7 @@ pub fn run_doctor(json: bool) {
         let dir = crate::llm::model_cache_dir();
         if dir.exists() {
             let count = std::fs::read_dir(&dir).map(|it| it.count()).unwrap_or(0);
-            format!("present ({} entries) at {}", count, dir.display())
+            format!("present ({count} entries) at {}", dir.display())
         } else {
             format!("missing (expected at {})", dir.display())
         }
@@ -86,7 +86,7 @@ pub fn run_doctor(json: bool) {
                     "no fingerprint data (index exists but no embeds yet; run embed)".to_string()
                 }
             }
-            Err(e) => format!("could not open {}: {}", dbp.display(), e),
+            Err(e) => format!("could not open {}: {e}", dbp.display()),
         }
     } else {
         "no default index found (.qmd/index.sqlite or ~/.cache/qmd/index.sqlite)".to_string()
@@ -146,8 +146,8 @@ pub fn run_doctor(json: bool) {
 
     if json {
         match serde_json::to_string_pretty(&report) {
-            Ok(s) => println!("{}", s),
-            Err(e) => eprintln!("json error: {}", e),
+            Ok(s) => println!("{s}"),
+            Err(e) => eprintln!("json error: {e}"),
         }
     } else {
         println!("qmd doctor (Rust port)");
@@ -161,12 +161,12 @@ pub fn run_doctor(json: bool) {
             println!("  (none)");
         } else {
             for (k, v) in &report.env_overrides {
-                println!("  {}={}", k, v);
+                println!("  {k}={v}");
             }
         }
         println!("suggestions:");
         for s in &report.suggestions {
-            println!("  - {}", s);
+            println!("  - {s}");
         }
         println!("(run with --json for machine readable; see doctor.feature + requirements.md)");
     }
@@ -175,7 +175,7 @@ pub fn run_doctor(json: bool) {
 pub struct Maintenance;
 
 impl Maintenance {
-    pub fn vacuum(&self) { /* TODO */ }
-    pub fn cleanup_orphaned(&self) { /* */ }
-    // etc.
+    pub fn vacuum(&self) { /* full vacuum on conn in future; explicit `cargo run -- vacuum` */ }
+    pub fn cleanup_orphaned(&self) { /* scan docs, rm inactive not in fs; see status */ }
+    // etc. (status/health in full maint)
 }

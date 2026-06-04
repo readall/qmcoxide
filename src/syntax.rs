@@ -1,7 +1,7 @@
 //! Formal SYNTAX EBNF query parser.
 //! Implements 100% of docs/SYNTAX.md for agent/CLI/MCP compat (structured queries, lex negation/phrase, intent, expand).
 //! Used by CLI, MCP tools, search layer.
-//! Refs: task qmcoxide-o58.20 (P0), SYNTAX.md (EBNF + examples + tables), search_hybrid_query.feature, mcp.feature.
+//! Refs: task qmcoxide-o58.20 (P0), SYNTAX.md (EBNF + tables + examples), search_hybrid_query.feature, mcp.feature.
 //! No extra deps (use regex + manual for quoted/neg).
 
 use regex::Regex;
@@ -76,9 +76,9 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
                 "intent" => intent = Some(txt),
                 "lex" => {
                     // parse lex terms: words, "phrase", -neg, -"neg phrase"
-                    for cap in lex_term_re().find_iter(&rest) {
+                    for cap in lex_term_re().find_iter(rest) {
                         let t = cap.as_str();
-                        if t.starts_with('-"') {
+                        if t.starts_with("-\""") {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::NegPhrase(m[1].to_string()));
                             }
@@ -95,10 +95,10 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
                 }
                 "vec" => vec_q = Some(txt),
                 "hyde" => hyde = Some(txt),
-                _ => return Err(format!("unknown type: {}", typ)),
+                _ => return Err(format!("unknown type: {typ}")),
             }
         } else {
-            return Err(format!("bad line: {}", line));
+            return Err(format!("bad line: {line}"));
         }
     }
 
@@ -127,19 +127,20 @@ vec: how to improve page load times"#;
             assert!(matches!(lex[0], LexTerm::Word(ref s) if s == "performance"));
             assert_eq!(vec, Some("how to improve page load times".to_string()));
             assert!(hyde.is_none());
-        } else { panic!("not structured"); }
+        } else { panic!("expected Structured, got {parsed:?} (check parse_query impl vs SYNTAX EBNF)"); }
     }
 
     #[test]
     fn test_lex_negation_and_phrase() {
-        let q = r#"lex: \"machine learning\" -\"deep learning\"\nlex: auth -oauth -saml"#;
+        let q = r#"lex: "machine learning" -"deep learning"
+lex: auth -oauth -saml"#;
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
             assert!(matches!(&lex[0], LexTerm::Phrase(s) if s == "machine learning"));
             assert!(matches!(&lex[1], LexTerm::NegPhrase(s) if s == "deep learning"));
             assert!(matches!(&lex[2], LexTerm::Word(s) if s == "auth"));
             assert!(matches!(&lex[3], LexTerm::NegWord(s) if s == "oauth"));
-        } else { panic!(); }
+        } else { panic!("expected Structured, got {parsed:?}"); }
     }
 
     #[test]

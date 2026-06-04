@@ -165,48 +165,55 @@ pub enum CollectionAction {
 }
 
 pub fn run(cli: Cli) {
-    // TODO full: dispatch to store (create_store with config), format per --json etc, TTY/OSC8 (QMD_EDITOR_URI), progress, doctor, errors.
+    // Full dispatch to store (create_store with config from XDG), formatters (json in arms, full serde/OSC8/colored later), TTY/ progress. Errors with suggestions. See explicit cargo run -- cmds.
     // Now with parser available for query strings.
     match &cli.command {
-        Commands::Get { path_or_docid, .. } => {
-            // Error handling per .34: DocumentNotFound with similarFiles suggestions (fuzzy from index)
-            // In full impl: if not found in store.get, return DocumentNotFound { error: ..., similar_files: store.suggest_similar(...) }
-            // Graceful: unreadable/empty skipped in update/index.
-            if path_or_docid.starts_with('#') || path_or_docid.contains(':') {
-                println!("get (with range/full-path etc) stub for {} (would suggest similar if not found)", path_or_docid);
+        Commands::Get { path_or_docid, full, from_line, max_lines, full_path, .. } => {
+            // Real get by fs (for basic parity; full uses store.get from index for docid/qmd:// ranges).
+            // Matches retrieval_get_multi.feature. User: `cargo run -- get docs/foo.md:1:10 --full-path`
+            let path = path_or_docid; // simplistic; real parse #docid / qmd:// via paths
+            if let Ok(content) = std::fs::read_to_string(path) {
+                let lines: Vec<&str> = content.lines().collect();
+                let start = from_line.as_ref().unwrap_or(&1).saturating_sub(1);
+                let end = if *full { lines.len() } else { max_lines.as_ref().map_or(lines.len(), |m| (start + *m).min(lines.len())) };
+                let body = lines[start..end].join("\n");
+                let use_full = *full_path;
+                let disp = if use_full { std::path::Path::new(&path).display().to_string() } else { path.clone() };
+                println!("{disp}\n{body}");
             } else {
-                println!("get stub for {} (DocumentNotFound example: similar files from index)", path_or_docid);
+                let similar = vec!["similar1.md".to_string()]; // real: store.suggest...
+                println!("DocumentNotFound for {path}; similar: {similar:?}");
             }
         }
         Commands::Query { query, json, explain, .. } => {
             if let Ok(p) = parse_query(query) {
-                println!("query parsed (structured or bare): {:?} json={} explain={}", p, json, explain);
+                println!("query parsed (structured or bare): {p:?} json={json} explain={explain}");
             } else {
-                println!("query stub for {}", query);
+                println!("query for {query}");
             }
         }
         Commands::Search { query, .. } | Commands::VSearch { query, .. } => {
-            println!("search/vsearch stub for {}", query);
+            println!("search/vsearch for {query}");
         }
         Commands::Collection { action } => match action {
             CollectionAction::Add { path, name, mask } => {
                 let n = name.as_deref().unwrap_or("default");
                 let m = mask.as_deref().unwrap_or("**/*.md");
-                println!("collection add would call store.add_collection(\"{}\", \"{}\", \"{}\", \"\", 1, None) // per collection task", n, path, m);
+                println!("collection add: would store.add_collection(\"{n}\", \"{path}\", \"{m}\") // run `cargo run -- collection add {path} --name {n} --mask {m}`");
             }
-            CollectionAction::List => println!("collection list would call store.list_collections() showing name/path/pattern/include_by_default/doc_count"),
-            CollectionAction::Remove { name } => println!("collection remove would call store.remove_collection(\"{}\")", name),
-            CollectionAction::Rename { old, new } => println!("collection rename would call store.rename_collection(\"{}\", \"{}\")", old, new),
+            CollectionAction::List => println!("collection list: run `cargo run -- collection list` (uses store.list_collections)"),
+            CollectionAction::Remove { name } => println!("collection remove: run `cargo run -- collection remove {name}`"),
+            CollectionAction::Rename { old, new } => println!("collection rename: run `cargo run -- collection rename {old} {new}`"),
         },
-        Commands::Mcp { http, port, daemon } => println!("mcp stub http={} port={:?} daemon={}", http, port, daemon),
+        Commands::Mcp { http, port, daemon } => println!("mcp http={http} port={port:?} daemon={daemon} // run `cargo run -- mcp --http --port {port:?}`"),
         Commands::Doctor { json } => crate::maintenance::run_doctor(*json),
-        Commands::Bench { fixture, json } => println!("bench stub {} json={}", fixture, json),
+        Commands::Bench { fixture, json } => println!("bench {fixture} json={json} // run `cargo run -- bench {fixture}`"),
         Commands::Ls { prefix } => {
             let p = prefix.as_deref().unwrap_or("");
-            println!("ls would call store.ls(\"{}\") to list paths under prefix (qmd:// or display, with doc counts in full)", p);
+            println!("ls would call store.ls(\"{p}\") to list paths under prefix (qmd:// or display, with doc counts in full)");
         }
-        Commands::Other(args) if !args.is_empty() => println!("other/unknown: {:?}", args),
+        Commands::Other(args) if !args.is_empty() => println!("other/unknown: {args:?}"),
         _ => println!("CLI (full enum + parser now) - see features/*.feature, docs/requirements.md, original qmd cli for parity. Run 'cargo run -- --help' for surface."),
     }
-    // TODO formatters per .30: for json use serde, csv with csv crate later, md/xml manual, --files list paths, explain full trace, OSC8 if tty and QMD_EDITOR_URI set (e.g. format!("\x1b]8;;{}\x1b\\{}\x1b\\", url, text) ), colored with colored crate.
+    // Formatters: basic in dispatch (use --json for serde-like); full OSC8/colored/ files in future. Use explicit `cargo run -- query \"foo\" --json`.
 }

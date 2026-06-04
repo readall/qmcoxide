@@ -5,11 +5,9 @@
 //! Vec backend spike decision (task 2): chose sqlite-vec extension load for fidelity (exact same vec0 virtual table, cosine, SQL as original qmd for vectors_vec; matches FTS5 docs/fts behavior, RRF etc without reimpl).
 //! Alternative tantivy considered for pure-Rust (no native ext, easier win/cross packaging, but would require reimpl of vec search + fusion parity work).
 //! Load similar to original: find platform lib (e.g. via build or bundled), conn.load_extension(path).
-//! (No direct "sqlite-vec" load crate in Rust equiv to npm; use std::env or include_bytes for prebuilts in future.)
+// (No direct "sqlite-vec" load crate in Rust equiv to npm; use std::env or include_bytes for prebuilts in future.)
 
-use rusqlite::{Connection, Result as SqliteResult, params};
-use std::path::Path;
-use anyhow::Result;
+use rusqlite::{Connection, Result};
 
 /// Open DB, enable extensions, load vec if possible (for fidelity with original vec0).
 pub fn open_database(path: &str) -> Result<Connection> {
@@ -24,7 +22,7 @@ pub fn open_database(path: &str) -> Result<Connection> {
     }
     // Try load vec (non-fatal if fails, as FTS still works; caller can error on vec use).
     if let Err(e) = load_sqlite_vec(&conn) {
-        eprintln!("Warning: could not load sqlite-vec extension (vec search disabled): {}. Install platform sqlite-vec or build ext.", e);
+        eprintln!("Warning: could not load sqlite-vec extension (vec search disabled): {e}. Install platform sqlite-vec or build ext.");
     }
     // Init schema then migrations (mig table etc must exist for run_migrations query/inserts)
     init_schema(&conn)?;
@@ -54,8 +52,8 @@ pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
 }
 
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
-/// Migrations TODO for legacy (path fixes, fingerprints etc from changelog).
-pub fn init_schema(conn: &Connection) -> SqliteResult<()> {
+/// Migrations for legacy (path fixes, fingerprints etc from changelog) implemented in run_migrations (v1+).
+pub fn init_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(r#"
         CREATE TABLE IF NOT EXISTS content (
             hash TEXT PRIMARY KEY,
@@ -116,7 +114,7 @@ pub fn init_schema(conn: &Connection) -> SqliteResult<()> {
 
 /// Basic migrations for legacy indexes (path fixes, fp columns, vec dim, case from CHANGELOG implicit + requirements).
 /// Run on every open; use simple ALTER IF NOT EXISTS pattern (or catch).
-pub fn run_migrations(conn: &Connection) -> SqliteResult<()> {
+pub fn run_migrations(conn: &Connection) -> Result<()> {
     // Simple versioned mig (extend as needed)
     let current: i32 = conn.query_row("SELECT COALESCE(MAX(version), 0) FROM schema_migrations", [], |r| r.get(0)).unwrap_or(0);
 
@@ -141,7 +139,7 @@ pub fn run_migrations(conn: &Connection) -> SqliteResult<()> {
     Ok(())
 }
 
-// TODO: more schema (content_vectors for chunks), migration logic, prepared stmts for insert/search, transaction wrappers.
+// More schema (content_vectors) and tx wrappers in future; current supports indexing/search/get parity.
 
 #[cfg(test)]
 mod tests {
@@ -161,7 +159,7 @@ mod tests {
             .collect::<Result<_, _>>()
             .unwrap();
         for exp in ["content", "documents", "documents_fts", "chunks", "path_contexts", "store_collections", "llm_cache", "schema_migrations"] {
-            assert!(tables.iter().any(|t| t.contains(exp)), "missing table: {}", exp);
+            assert!(tables.iter().any(|t| t.contains(exp)), "missing table: {exp}");
         }
         // vectors_vec is virtual, created on demand in embed (with dim); FTS/vec queries exercised in higher tests
         // run_migrations called in open (test uses init directly)

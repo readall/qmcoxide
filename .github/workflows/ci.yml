@@ -29,5 +29,6 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
-      # TODO: smoke (cargo install --path . ; qmd --version ; small fixture cycle with gherkin or test), cross, container.
-      # See docs/verification.md and plan.md (full CI: windows included, parity with original qmd).
+      # NOTE: add smoke (cargo install --path . ; qmd --version ; small fixture cycle with gherkin or test), cross, container in follow-up PR.
+      # See docs/verification.md and plan.md (full CI: windows included, parity with original qmd via explicit side-by-side).
+

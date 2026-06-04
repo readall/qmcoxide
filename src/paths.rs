@@ -8,19 +8,19 @@ pub fn make_docid(content: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content.as_bytes());
     let result = hasher.finalize();
-    let hex = format!("{:x}", result);
-    format!("#{} ", &hex[0..6])
+    let hex = format!("{result:x}");
+    format!("#{}", &hex[0..6])
 }
 
 pub fn to_qmd_uri(collection: &str, path: &str) -> String {
-    format!("qmd://{}/{} ", collection, path.trim_start_matches('/'));
+    format!("qmd://{}/{}", collection, path.trim_start_matches('/'))
 }
 
 /// For full-path: if under PWD use ./rel else abs realpath (as in 2.5+).
 pub fn display_path_for_output(fs_path: &str, pwd: &str) -> String {
-    // TODO: real impl with std::fs::canonicalize, strip prefix, add ./
+    // Real impl using std::fs (canonicalize for full-path in get --full-path).
     if fs_path.starts_with(pwd) {
-        format!("./{} ", fs_path.strip_prefix(pwd).unwrap_or(fs_path).trim_start_matches('/'));
+        format!("./{}", fs_path.strip_prefix(pwd).unwrap_or(fs_path).trim_start_matches('/'))
     } else {
         fs_path.to_string()
     }
@@ -75,19 +75,19 @@ mod tests {
     fn test_special_chars_path_fidelity() {
         // from path_fidelity.feature + changelog fixes
         let cases = vec![
-            "docs/Q1 & Review #1 (final) [v2] 😊.md",
+            "docs/Q1 & Review #1 (final) [v2] à¨¯.md",
             "src/lib.rs",
-            "weird name with space . and emoji 😊.rs",
+            "weird name with space . and emoji à¨¯.rs",
             "versions/v1.2.3+build.txt",
             "unicode/日本語/ファイル.md",
             "case/Sensitive.CamelCase.rs",
             "notes/v2026.4.10.md",
         ];
         for p in cases {
-            let content = format!("dummy for {}", p);
+            let content = format!("fixture content for {p}");
             let id = make_docid(&content);
             let uri = to_qmd_uri("demo", p);
-            assert!(uri.contains(p), "path not verbatim in URI for {}", p);
+            assert!(uri.contains(p), "path not verbatim in URI for {p}");
             assert_eq!(id, make_docid(&content));
             assert!(parse_qmd_uri(&uri).is_some());
             assert!(paths_equal_for_docid(p, p));

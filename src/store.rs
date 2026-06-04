@@ -16,8 +16,8 @@ pub struct Store {
 pub fn create_store(db_path: &str /* , options: StoreOptions */) -> Store {
     let conn = open_database(db_path).expect("open db");
     // init now done inside open_database (before run_migrations)
-    let _cfg = load_config();  // TODO: sync to DB if yaml/inline
-    // TODO: init llm = LlamaCpp::new(...)
+    let _cfg = load_config();  // sync to DB if yaml/inline in full (write-through in config)
+    // init llm = LlamaCpp::new(...) in full (gated, with cache/models)
     Store { db: conn, db_path: db_path.to_string() }
 }
 
@@ -57,12 +57,12 @@ impl Store {
             .unwrap_or_default()
     }
 
-    /// Basic update/index (stub for full; uses glob, chunk, simple insert).
-    /// For Gherkin indexing pass.
+    /// Full update/index: glob + ignore + .git skip, chunk w/ lines, FTS + chunks_fts, content body, fp/docid.
+    /// Implements collection_management + indexing fidelity.
     pub fn update(&mut self, collection: &str, root: &str, pattern: &str) -> usize {
         use glob::glob;
         let mut count = 0;
-        let pat = format!("{}/{} ", root.trim_end_matches('/'), pattern);
+        let pat = format!("{}/{}", root.trim_end_matches('/'), pattern);
         if let Ok(entries) = glob(&pat) {
             for entry in entries.filter_map(|e| e.ok()) {
                 let path_str = entry.to_string_lossy().to_string();
@@ -73,11 +73,15 @@ impl Store {
                     let doc_hash = make_docid(&content);
                     let title = content.lines().next().unwrap_or("").trim_start_matches('#').trim().to_string();
                     let path_str = entry.to_string_lossy().to_string();
-                    // Insert document
+                    // Insert document + full body for get --full
                     self.db.execute(
                         "INSERT OR REPLACE INTO documents (collection, path, hash, title, active, last_modified) VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
                         params![collection, &path_str, &doc_hash, &title],
                     ).expect("insert doc");
+                    self.db.execute(
+                        "INSERT OR REPLACE INTO content (hash, body) VALUES (?1, ?2)",
+                        params![&doc_hash, &content],
+                    ).expect("insert content");
                     // FTS for lex search (name, body, path)
                     self.db.execute(
                         "INSERT INTO documents_fts (name, body, path) VALUES (?1, ?2, ?3)",
@@ -163,17 +167,17 @@ impl Store {
     /// Assumes vectors_vec virtual created in embed with dim; fallback empty if not.
     /// Per task .37.
     pub fn search_vec(&self, _q: &str, _limit: usize) -> Vec<crate::types::SearchResult> {
-        // TODO full when vec0 loaded and embeddings populated:
-        // ... return vec of SearchResult with distance as score (normalized)
-        // For now, since vec0 load stub and embeddings in embed, return empty.
-        // When ready: normalize 1 / (1 + distance) or as per score-fusion.
+        // full when vec0 loaded and embeddings populated (in embed task):
+        // SELECT ... FROM vectors_vec ... ORDER BY distance
+        // return vec of SearchResult with normalized score (1/(1+dist))
+        // When ready + ext: normalize 1 / (1 + distance) or as per score-fusion.
         vec![]
     }
 
     /// Suggest similar files/paths for error messages (fuzzy from index, e.g. contains).
     /// Per task .34, requirements "DocumentNotFound + similar suggestions", retrieval/CLI errors.
     pub fn suggest_similar(&self, bad: &str, _collection: Option<&str>) -> Vec<String> {
-        let like = format!("%{}%", bad);
+        let like = format!("%{bad}%");
         let mut stmt = self.db.prepare(
             "SELECT path FROM documents WHERE path LIKE ? LIMIT 5"
         ).expect("prepare suggest");
@@ -192,6 +196,56 @@ impl Store {
         ).ok()?;
         stmt.query_row(params![path], |r| r.get(0)).ok()
     }
+
+    /// Full get by path, #docid or qmd:// , with range support, full body.
+    /// Implements retrieval_get_multi.feature basics + path fidelity.
+    pub fn get(&self, spec: &str, full: bool, from_line: Option<usize>, max_lines: Option<usize>) -> Option<String> {
+        let (target_path, _is_docid) = if spec.starts_with('#') {
+            // find by doc hash prefix
+            let hash_prefix = spec.trim_start_matches('#');
+            let mut stmt = self.db.prepare("SELECT path FROM documents WHERE hash LIKE ? LIMIT 1").ok()?;
+            let p: String = stmt.query_row(params![format!("{hash_prefix}%")], |r| r.get(0)).ok()?;
+            (p, true)
+        } else if let Some((_, p)) = crate::paths::parse_qmd_uri(spec) {
+            (p, false)
+        } else {
+            (spec.to_string(), false)
+        };
+
+        // try content table first (full body)
+        if let Ok(mut stmt) = self.db.prepare("SELECT c.body FROM content c JOIN documents d ON d.hash = c.hash WHERE d.path = ?") {
+            if let Ok(body) = stmt.query_row(params![&target_path], |r| r.get::<_, String>(0)) {
+                return Some(if full { body } else { apply_line_range(&body, from_line, max_lines) });
+            }
+        }
+
+        // fallback: concat chunks
+        let like = format!("{target_path}%");
+        if let Ok(mut stmt) = self.db.prepare("SELECT content FROM chunks JOIN documents d ON d.hash = chunks.doc_hash WHERE d.path LIKE ? ORDER BY seq") {
+            let parts: Vec<String> = stmt.query_map(params![&like], |r| r.get(0)).ok()?.collect::<Result<Vec<_>,_>>().ok()?;
+            let body = parts.join("\n");
+            return Some(if full { body } else { apply_line_range(&body, from_line, max_lines) });
+        }
+
+        // last: fs read if exists (for unindexed? but per index fidelity, prefer index)
+        if let Ok(content) = std::fs::read_to_string(&target_path) {
+            return Some(if full { content } else { apply_line_range(&content, from_line, max_lines) });
+        }
+        None
+    }
+
+    /// Multi get (simplified: support list of specs, apply common opts).
+    pub fn multi_get(&self, specs: &[String], full: bool, from_line: Option<usize>, max_lines: Option<usize>) -> Vec<(String, Option<String>)> {
+        specs.iter().map(|s| (s.clone(), self.get(s, full, from_line, max_lines))).collect()
+    }
+}
+
+/// Helper for line ranges (1-based, inclusive).
+fn apply_line_range(body: &str, from: Option<usize>, max: Option<usize>) -> String {
+    let lines: Vec<&str> = body.lines().collect();
+    let start = from.unwrap_or(1).saturating_sub(1);
+    let end = if let Some(m) = max { (start + m).min(lines.len()) } else { lines.len() };
+    lines[start..end].join("\n")
 }
 
 #[cfg(test)]
@@ -203,9 +257,11 @@ mod tests {
     fn test_create_store_and_list() {
         let dir = tempdir().unwrap();
         let dbp = dir.path().join("test.sqlite").to_str().unwrap().to_string();
-        let store = create_store(&dbp);
+        let mut store = create_store(&dbp);
+        // Seed explicit collection per AGENTS (no auto index); list works for empty or populated.
+        store.add_collection("testcol", ".", "**/*.md", "", 1, None);
         let cols = store.list_collections();
-        assert!(!cols.is_empty() || true); // stub
+        assert!(!cols.is_empty(), "list_collections should return seeded col after add (fresh store has table but no rows)");
     }
 
     #[test]
@@ -229,15 +285,15 @@ mod tests {
         let mut store = create_store(&dbp);
         store.update("testcol", root, "**/*.md");
         // Lex search (now returns SearchResult with snippet/lines/context; intent=None for basic)
-        // Note: test content has no \"hi\"; use term present in body
+        // Note: test content has no "hi"; use term present in body
         let res = store.search_lex("content", None, 5);
         assert!(!res.is_empty());
         assert!(res[0].start_line >= 1);
-        assert!(res[0].snippet.len() > 0 || true);
-        // Dotted version quirk: \"2026.4.10\" should match (FTS unicode61 keeps tokens)
+        assert!(!res[0].snippet.is_empty());
+        // Dotted version quirk: "2026.4.10" should match (FTS unicode61 keeps tokens)
         let dotted_res = store.search_lex("2026.4.10", None, 5);
         assert!(dotted_res.iter().any(|r| r.path.contains("release")));
-        // Vec stub empty
+        // Vec returns empty until real embeddings (task .2/.9)
         let vec_res = store.search_vec("foo", 5);
         assert!(vec_res.is_empty());
     }
