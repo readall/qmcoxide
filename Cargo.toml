@@ -38,7 +38,7 @@ glob = "0.3"  # collection patterns (picomatch-like)
 hf-hub = { version = "0.3", optional = true }
 
 # For LLM: chose llama-cpp-2 (closest parity to node-llama-cpp / llama.cpp used in original qmd; supports GGUF, embed, chat, sampling for rerank/expand, GPU backends via features).
-llama-cpp-2 = { version = "0.1", features = ["metal"], optional = true }  # GPU; pick one backend (metal/cuda/vulkan) or conditional; all three conflict in build.rs. See spike notes, README Windows note, AGENTS. For full multi, use separate builds or runtime probe.
+llama-cpp-2 = { version = "0.1", optional = true }  # GPU backends (metal/cuda/vulkan/...) selected via the crate's own features when the "llm" feature is enabled (see llm.rs, embed.feature). Do not hardcode a backend here (causes cross-platform resolution failures in cargo check on CI for ubuntu/mac/win). Users on mac can do `cargo build --features llm` (and ensure build deps); on other platforms falls back to CPU/Noop when !cfg. See AGENTS Windows note for link.exe, README.
 
 # For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
 # Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
@@ -65,7 +65,7 @@ insta = "1"  # for output snapshots
 [features]
 default = []
 # sqlite-vec = []  # if bundling extension
-llm = ["dep:hf-hub", "dep:llama-cpp-2"]  # gated; core for embed/rerank/expand parity (see requirements "Models", llm.rs, embed.feature). Use `cargo check --features llm` after ensuring MSVC link.exe not shadowed on Windows.
+llm = ["dep:hf-hub", "dep:llama-cpp-2"]  # gated; core for embed/rerank/expand parity (see requirements "Models", llm.rs, embed.feature). Backend (metal etc) chosen by additional features on llama-cpp-2 or its config when building with --features llm. CI uses plain check (no llm feature) so always clean. Use `cargo check --features llm` locally after PATH fix for native on Windows.
 ast-chunk = [
   "dep:tree-sitter",
   "dep:tree-sitter-rust",

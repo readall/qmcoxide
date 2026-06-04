@@ -5,7 +5,7 @@
 //! Vec backend spike decision (task 2): chose sqlite-vec extension load for fidelity (exact same vec0 virtual table, cosine, SQL as original qmd for vectors_vec; matches FTS5 docs/fts behavior, RRF etc without reimpl).
 //! Alternative tantivy considered for pure-Rust (no native ext, easier win/cross packaging, but would require reimpl of vec search + fusion parity work).
 //! Load similar to original: find platform lib (e.g. via build or bundled), conn.load_extension(path).
-// (No direct "sqlite-vec" load crate in Rust equiv to npm; use std::env or include_bytes for prebuilts in future.)
+//! (No direct "sqlite-vec" load crate in Rust equiv to npm; use std::env or include_bytes for prebuilts in future.)
 
 use rusqlite::{Connection, Result};
 
@@ -47,8 +47,10 @@ pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
             }
         }
     }
-    // fallback no-op (warn in open)
-    Err(rusqlite::Error::InvalidQuery) // signals not loaded
+    // fallback no-op (common on CI/dev without the platform sqlite-vec .so/dylib/dll installed)
+    // Warn here for the common case; explicit bad SQLITE_VEC_PATH still errors above.
+    eprintln!("Warning: could not load sqlite-vec extension (vec search disabled). Install platform sqlite-vec or build ext (or set SQLITE_VEC_PATH).");
+    Ok(())
 }
 
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
