@@ -36,6 +36,7 @@ pub struct LlamaCpp {
     // TODO: model: Option<llama::LlamaModel>, ctxs for embed/rerank/generate, etc.
     // GPU backend from QMD_LLAMA_GPU or auto, with QMD_FORCE_CPU override.
     _phantom: std::marker::PhantomData<()>,
+    last_used: std::time::Instant,
 }
 
 impl LlamaCpp {
@@ -54,7 +55,31 @@ impl LlamaCpp {
         // - set ggml log quiet, metal residency etc.
         // - inactivity timer for dispose (see model lifecycle task)
         println!("LLM spike: llama-cpp-2 selected; new() using exact prompts/URIs/dims from .25 (real load in full impl)");
-        Self { _phantom: std::marker::PhantomData }
+        Self {
+            _phantom: std::marker::PhantomData,
+            last_used: std::time::Instant::now(),
+        }
+    }
+
+    /// Touch last_used (call on any use: embed/rank/expand).
+    pub fn touch(&mut self) {
+        self.last_used = std::time::Instant::now();
+    }
+
+    /// Unload if >5min inactive (for resource NFR, daemon warm separate).
+    /// In full impl: drop models/ctxs, clear residency.
+    pub fn unload_if_inactive(&mut self) {
+        if self.last_used.elapsed() > std::time::Duration::from_secs(5 * 60) {
+            println!("LLM: >5min inactivity - would unload/close contexts, respect residency/quiet envs (GGML_METAL_NO_RESIDENCY etc set in main)");
+            // self.model = None; etc.
+            self.last_used = std::time::Instant::now();
+        }
+    }
+
+    /// For MCP daemon: keep warm (touch + optional small op to keep loaded).
+    pub fn keep_warm(&mut self) {
+        self.touch();
+        // in full: if loaded, tiny embed or just touch to prevent unload
     }
 
     // TODO: pub fn embed_batch(&self, prompts: &[String]) -> Vec<Vec<f32>> { ... }
