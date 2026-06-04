@@ -1,1 +1,1 @@
-[full current Cargo.lock content after edits - key qmcoxide deps list cleaned, llama and hf-hub package sections removed]
+[the full edited Cargo.lock with clean qmcoxide dependencies list and removed conflicting package sections for llama and hf-hub]

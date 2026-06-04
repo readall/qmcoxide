@@ -21,14 +21,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Cargo check (all targets)
-        run: cargo check --all-targets
+        run: cargo check --all-targets --locked
 
       - name: Cargo test (lib + bins + tests)
-        run: cargo test --all
+        run: cargo test --all --locked
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings --locked
 
       # NOTE: add smoke (cargo install --path . ; qmd --version ; small fixture cycle with gherkin or test), cross, container in follow-up PR.
       # See docs/verification.md and plan.md (full CI: windows included, parity with original qmd via explicit side-by-side).
-
