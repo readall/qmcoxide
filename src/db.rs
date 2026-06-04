@@ -11,6 +11,7 @@ use rusqlite::{Connection, Result as SqliteResult, params};
 use std::path::Path;
 use anyhow::Result;
 
+/// Open DB, enable extensions, load vec if possible (for fidelity with original vec0).
 pub fn open_database(path: &str) -> Result<Connection> {
     let conn = Connection::open(path)?;
     // PRAGMAs for durability/performance parity with original (WAL, etc.)
@@ -25,7 +26,8 @@ pub fn open_database(path: &str) -> Result<Connection> {
     if let Err(e) = load_sqlite_vec(&conn) {
         eprintln!("Warning: could not load sqlite-vec extension (vec search disabled): {}. Install platform sqlite-vec or build ext.", e);
     }
-    // Run migrations for legacy (path fixes, fp cols, vec dim, case from changelog implicit reqs)
+    // Init schema then migrations (mig table etc must exist for run_migrations query/inserts)
+    init_schema(&conn)?;
     run_migrations(&conn)?;
     Ok(conn)
 }
@@ -73,6 +75,7 @@ pub fn init_schema(conn: &Connection) -> SqliteResult<()> {
             fingerprint TEXT,
             chunk_strategy TEXT
         );
+        -- chunks_fts added in migration v3 for snippet+line search (.28)
         -- vectors_vec VIRTUAL vec0 created dynamically in embed (after knowing dim, e.g. 768 or model specific)
         -- CREATE VIRTUAL TABLE IF NOT EXISTS vectors_vec USING vec0(hash_seq TEXT PRIMARY KEY, embedding FLOAT[768] distance_metric=cosine);
         CREATE TABLE IF NOT EXISTS path_contexts (
@@ -115,6 +118,13 @@ pub fn run_migrations(conn: &Connection) -> SqliteResult<()> {
     if current < 2 {
         // vec dim or other; in practice recreate virtual if needed in embed path
         conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (2)", [])?;
+    }
+    if current < 3 {
+        // chunks_fts for accurate snippet extraction + line numbers in search (.28)
+        let _ = conn.execute_batch(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5( path, content, doc_hash, tokenize='unicode61' );"
+        );
+        conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)", [])?;
     }
     // Add more for path verbatim fixes, case etc. (data fixups if needed)
     Ok(())

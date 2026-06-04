@@ -20,6 +20,7 @@ pub mod types;    // Shared types, errors, progress, results (DocumentResult, Hy
 // For now placeholders so `cargo check` and early layout work. See plan for impl order.
 
 pub use store::Store as QMDStore;  // TODO: real impl + create_store fn (parity with original QMDStore from src/index.ts)
+pub use types::SearchResult;
 
 // TODO: re-export key types, utils like extract_snippet, add_line_numbers, DEFAULT_*, Maintenance
 
