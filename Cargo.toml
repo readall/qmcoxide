@@ -41,7 +41,7 @@ hf-hub = { version = "0.3", optional = true }
 llama-cpp-2 = { version = "0.1", optional = true }  # GPU backends (metal/cuda/vulkan/...) selected via the crate's own features when the "llm" feature is enabled (see llm.rs, embed.feature). Base "static" activated via the llm feature below for a working cross-plat default. Do not hardcode Apple "metal" etc at dep level (causes resolution fail in cargo check on CI ubuntu/mac/win). Users wanting accel: `cargo build --features llm` + crate features or env as supported by llama-cpp-2. See AGENTS for Windows link.exe, README.
 
 # For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
-# Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
+# Versions aligned to 0.23 for compatibility (core + lang crates); see previous CI resolution issues with mixed 0.22/0.23.
 tree-sitter = { version = "0.23", optional = true }
 tree-sitter-rust = { version = "0.23.0", optional = true }
 tree-sitter-python = { version = "0.23.0", optional = true }
