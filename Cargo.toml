@@ -19,7 +19,7 @@ path = "src/lib.rs"  # public SDK surface (QMDStore equivalent) - to be implemen
 
 [dependencies]
 # Core (chosen per plan analysis; versions approximate current stable as of 2026)
-rusqlite = { version = "0.32", features = ["bundled", "modern_sqlite"] }  # FTS5 support via build
+rusqlite = { version = "0.32", features = ["bundled", "modern_sqlite", "load_extension"] }  # FTS5 + extension load for vec0 (sqlite-vec) fidelity per data-model; see db.rs open_database
 # sqlite-vec extension loaded at runtime (see db.rs); alternative tantivy for pure-Rust vec/fts in future spike
 clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -34,11 +34,11 @@ dirs = "5"  # XDG cache/config (~/.cache/qmd , ~/.config/qmd per compat decision
 glob = "0.3"  # collection patterns (picomatch-like)
 
 # For model downloads from HF (exact GGUF URIs for embed/rerank/expand parity with original qmd; cache ~/.cache/qmd/models)
-# Always included (core for LLM parity); gated features are for ast-chunk and mcp.
-hf-hub = { version = "0.3" }
+# Gated behind "llm" feature (core for parity but native build on Windows requires clean MSVC link.exe PATH; cargo check --lib succeeds without; see README Windows note, AGENTS).
+hf-hub = { version = "0.3", optional = true }
 
 # For LLM: chose llama-cpp-2 (closest parity to node-llama-cpp / llama.cpp used in original qmd; supports GGUF, embed, chat, sampling for rerank/expand, GPU backends via features).
-llama-cpp-2 = { version = "0.1", features = ["metal"] }  # GPU; pick one backend (metal/cuda/vulkan) or conditional; all three conflict in build.rs. See spike notes, README Windows note, AGENTS. For full multi, use separate builds or runtime probe.
+llama-cpp-2 = { version = "0.1", features = ["metal"], optional = true }  # GPU; pick one backend (metal/cuda/vulkan) or conditional; all three conflict in build.rs. See spike notes, README Windows note, AGENTS. For full multi, use separate builds or runtime probe.
 
 # For optional AST-based chunking (tree-sitter for .rs .py .go .ts .js etc per chunking.md and chunking.feature)
 # Versions chosen for compatibility (core ~0.22, lang crates ~0.21); update as needed for latest.
@@ -65,6 +65,7 @@ insta = "1"  # for output snapshots
 [features]
 default = []
 # sqlite-vec = []  # if bundling extension
+llm = ["dep:hf-hub", "dep:llama-cpp-2"]  # gated; core for embed/rerank/expand parity (see requirements "Models", llm.rs, embed.feature). Use `cargo check --features llm` after ensuring MSVC link.exe not shadowed on Windows.
 ast-chunk = [
   "dep:tree-sitter",
   "dep:tree-sitter-rust",
@@ -75,9 +76,7 @@ ast-chunk = [
 ]  # optional, for AST chunking in code files (see chunking.feature + chunking.md)
 mcp = ["dep:tokio", "dep:axum", "dep:serde_json"]  # for stdio + HTTP daemon (see mcp.feature)
 
-# hf-hub, tree-sitter*, tokio/axum/serde_json are optional and activated via features above for full parity.
-# llama-cpp-2 remains active (core for embed/rerank/expand per requirements "Models").
-
+# hf-hub, llama-cpp-2, tree-sitter*, tokio/axum/serde_json are optional and activated via features above for full parity.
 # See plan.md (in session or DESIGN.md) for full crate decisions, spikes (LLM, vec backend), port order, and verification.
 # Run `cargo add <crate>` or edit here + cargo update as needed during impl.
-# After edit: cargo check --features ast-chunk,mcp (modulo native link issues on some Windows envs)
+# After edit: cargo check --lib (or --features ast-chunk,mcp,llm modulo native link issues on some Windows envs per AGENTS)

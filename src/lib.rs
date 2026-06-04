@@ -19,7 +19,7 @@ pub mod types;    // Shared types, errors, progress, results (DocumentResult, Hy
 // Re-exports and types to be filled to match original public API parity (QMDStore, SearchOptions, etc.).
 // For now placeholders so `cargo check` and early layout work. See plan for impl order.
 
-pub use store::StorePlaceholder as QMDStore;  // TODO: real impl + create_store fn
+pub use store::Store as QMDStore;  // TODO: real impl + create_store fn (parity with original QMDStore from src/index.ts)
 
 // TODO: re-export key types, utils like extract_snippet, add_line_numbers, DEFAULT_*, Maintenance
 
