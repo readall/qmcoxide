@@ -208,4 +208,5 @@ pub fn run(cli: Cli) {
         Commands::Other(args) if !args.is_empty() => println!("other/unknown: {:?}", args),
         _ => println!("CLI (full enum + parser now) - see features/*.feature, docs/requirements.md, original qmd cli for parity. Run 'cargo run -- --help' for surface."),
     }
+    // TODO formatters per .30: for json use serde, csv with csv crate later, md/xml manual, --files list paths, explain full trace, OSC8 if tty and QMD_EDITOR_URI set (e.g. format!("\x1b]8;;{}\x1b\\{}\x1b]8;;\x1b\\", url, text) ), colored with colored crate.
 }
