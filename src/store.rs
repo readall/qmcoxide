@@ -22,13 +22,40 @@ pub fn create_store(db_path: &str /* , options: StoreOptions */) -> Store {
 }
 
 impl Store {
-    pub fn list_collections(&self) -> Vec<String> {
-        // TODO: query store_collections or documents group by
-        vec!["notes".to_string()] // stub
+    pub fn list_collections(&self) -> Vec<(String, String, String, i32)> {
+        // name, path, pattern, include_by_default (doc_count approx from sub or 0 for now; full in collection task)
+        let mut stmt = self.db.prepare("SELECT name, path, pattern, include_by_default FROM store_collections").expect("prepare list col");
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
     }
 
-    // TODO: add/remove/renameCollection (upsert/delete/rename in store_collections + yaml sync if needed)
-    // getDefaultCollectionNames, status basics (doc counts etc)
+    pub fn add_collection(&mut self, name: &str, path: &str, pattern: &str, ignore: &str, include_by_default: i32, update_cmd: Option<&str>) {
+        self.db.execute(
+            "INSERT OR REPLACE INTO store_collections (name, path, pattern, ignore, include_by_default, update_cmd) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![name, path, pattern, ignore, include_by_default, update_cmd],
+        ).expect("add col");
+    }
+
+    pub fn remove_collection(&mut self, name: &str) {
+        self.db.execute("DELETE FROM store_collections WHERE name = ?1", params![name]).expect("remove col");
+        // note: docs remain or deactivate in full
+    }
+
+    pub fn rename_collection(&mut self, old: &str, new: &str) {
+        self.db.execute("UPDATE store_collections SET name = ?1 WHERE name = ?2", params![new, old]).expect("rename col");
+    }
+
+    // ls prefix: list paths under prefix for collection (qmd:// or display)
+    pub fn ls(&self, prefix: &str) -> Vec<String> {
+        let like = format!("{}%", prefix.trim_end_matches('/'));
+        let mut stmt = self.db.prepare("SELECT path FROM documents WHERE path LIKE ? ORDER BY path LIMIT 100").expect("prepare ls");
+        stmt.query_map(params![like], |r| r.get(0))
+            .unwrap()
+            .collect::<Result<Vec<String>, _>>()
+            .unwrap_or_default()
+    }
 
     /// Basic update/index (stub for full; uses glob, chunk, simple insert).
     /// For Gherkin indexing pass.

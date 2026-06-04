@@ -189,15 +189,22 @@ pub fn run(cli: Cli) {
             println!("search/vsearch stub for {}", query);
         }
         Commands::Collection { action } => match action {
-            CollectionAction::Add { path, name, mask } => println!("collection add stub path={} name={:?} mask={:?}", path, name, mask),
-            CollectionAction::List => println!("collection list stub"),
-            CollectionAction::Remove { name } => println!("collection remove stub {}", name),
-            CollectionAction::Rename { old, new } => println!("collection rename {} -> {}", old, new),
+            CollectionAction::Add { path, name, mask } => {
+                let n = name.as_deref().unwrap_or("default");
+                let m = mask.as_deref().unwrap_or("**/*.md");
+                println!("collection add would call store.add_collection(\"{}\", \"{}\", \"{}\", \"\", 1, None) // per collection task", n, path, m);
+            }
+            CollectionAction::List => println!("collection list would call store.list_collections() showing name/path/pattern/include_by_default/doc_count"),
+            CollectionAction::Remove { name } => println!("collection remove would call store.remove_collection(\"{}\")", name),
+            CollectionAction::Rename { old, new } => println!("collection rename would call store.rename_collection(\"{}\", \"{}\")", old, new),
         },
         Commands::Mcp { http, port, daemon } => println!("mcp stub http={} port={:?} daemon={}", http, port, daemon),
         Commands::Doctor { json } => println!("doctor stub json={}", json),
         Commands::Bench { fixture, json } => println!("bench stub {} json={}", fixture, json),
-        Commands::Ls { prefix } => println!("ls stub {:?}", prefix),
+        Commands::Ls { prefix } => {
+            let p = prefix.as_deref().unwrap_or("");
+            println!("ls would call store.ls(\"{}\") to list paths under prefix (qmd:// or display, with doc counts in full)", p);
+        }
         Commands::Other(args) if !args.is_empty() => println!("other/unknown: {:?}", args),
         _ => println!("CLI (full enum + parser now) - see features/*.feature, docs/requirements.md, original qmd cli for parity. Run 'cargo run -- --help' for surface."),
     }
