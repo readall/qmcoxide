@@ -33,13 +33,24 @@ pub fn open_database(path: &str) -> Result<Connection> {
 }
 
 pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
-    // TODO: find loadable path like original (for prebuilts or system).
-    // For now, assume extension is in PATH or use conn.load_extension("sqlite-vec", None) if registered.
-    // In practice, use a crate or build script to bundle the .dylib/.so for target.
-    // Example for mac/linux: let path = get_sqlite_vec_path(); conn.load_extension(&path, None)?;
-    // For this skeleton, no-op or error if strict.
-    // To make tests pass without ext, make vec optional in higher layers.
-    Ok(())
+    // Real load per .9: try env SQLITE_VEC_PATH, then common names (original uses platform lib like Homebrew /usr/local/opt/sqlite-vec/lib/libsqlite_vec.dylib etc).
+    // Non-fatal: caller warns, vec search disabled if not present (parity with original when ext missing).
+    // For win: user provides dll via env or build ext; see AGENTS Windows note.
+    if let Ok(p) = std::env::var("SQLITE_VEC_PATH") {
+        unsafe {
+            conn.load_extension(&p, None)?;
+        }
+        return Ok(());
+    }
+    for candidate in &["sqlite-vec", "libsqlite_vec", "sqlite_vec", "libsqlite_vec.so", "libsqlite_vec.dylib", "sqlite_vec.dll"] {
+        unsafe {
+            if conn.load_extension(candidate, None).is_ok() {
+                return Ok(());
+            }
+        }
+    }
+    // fallback no-op (warn in open)
+    Err(rusqlite::Error::InvalidQuery) // signals not loaded
 }
 
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
