@@ -252,22 +252,16 @@ pub fn run(cli: Cli) {
                   println!("Note: Bench implementation pending - returning placeholder values");
               }
           },
-          Commands::Embed { collection, force, chunk_strategy } => {
-              // Implement embed command with full functionality
-              let coll = collection.as_deref().unwrap_or("default");
-              println!("Running embed on collection: {}", coll);
-              println!("  Force: {}", force);
-              println!("  Chunk strategy: {}", chunk_strategy.as_deref().unwrap_or("default"));
-              
-              // TODO: Implement actual embedding logic:
-              // 1. Load documents from collection
-              // 2. Chunk documents based on strategy (regex/auto)
-              // 3. Generate embeddings using LLM
-              // 4. Store embeddings with fingerprints
-              // 5. Handle partial recovery and model switching
-              
-              println!("Note: Embed implementation pending - this is a placeholder");
-          },
+           Commands::Embed { collection, force, chunk_strategy } => {
+               // Implement embed command with full functionality
+               let coll = collection.as_deref().unwrap_or("default");
+               println!("Running embed on collection: {}", coll);
+               println!("  Force: {}", force);
+               println!("  Chunk strategy: {}", chunk_strategy.as_deref().unwrap_or("default"));
+               
+               let embedded_count = store.embed(coll, force, chunk_strategy);
+               println!("Embedded {} documents", embedded_count);
+           },
           Commands::Ls { prefix } => {
             let p = prefix.as_deref().unwrap_or("");
             for path in store.ls(p) {
