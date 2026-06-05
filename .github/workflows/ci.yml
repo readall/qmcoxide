@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.88.0
+          components: clippy
+
+      - name: Install build dependencies for native crates (rusqlite bundled, tree-sitter, bindgen, cc)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang llvm libclang-dev pkg-config libssl-dev
+
+      - name: Install build dependencies for macOS (llvm for bindgen, clang for cc)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Cargo check (lib)
+        run: cargo check --lib
+
+      - name: Cargo test (lib + bins + tests)
+        run: cargo test --all
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # NOTE: add smoke (cargo install --path . ; qmd --version ; small fixture cycle with gherkin or test), cross, container in follow-up PR.
+      # See docs/verification.md and plan.md (full CI: windows included, parity with original qmd via explicit side-by-side).
+

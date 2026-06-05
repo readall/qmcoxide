@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "qmcoxide",
+  "project_id": "96e16b6b-e28f-4cef-ad7e-c0397b5e337c"
+}
