@@ -132,8 +132,9 @@ vec: how to improve page load times"#;
 
     #[test]
     fn test_lex_negation_and_phrase() {
-        let q = r#"lex: "machine learning" -"deep learning"
-lex: auth -oauth -saml"#;
+        let quote = char::from(34u8);
+        let q_ = format!("lex: {}machine learning{} -{}deep learning{}\nlex: auth -oauth -saml", quote, quote, quote, quote);
+        let q = q_.as_str();
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
             eprintln!("DEBUG lex len={} : {:?}", lex.len(), lex);
@@ -147,8 +148,9 @@ lex: auth -oauth -saml"#;
     #[test]
     fn test_full_from_syntax_md() {
         // examples from SYNTAX.md
-        let q = "lex: CAP theorem consistency\nlex: \"machine learning\" -\"deep learning\"";
-        let _ = parse_query(q).unwrap();
+        let quote = char::from(34u8);
+        let q = format!("lex: CAP theorem consistency\nlex: {}machine learning{} -{}deep learning{}", quote, quote, quote, quote);
+        let _ = parse_query(q.as_str()).unwrap();
         let q2 = "vec: how does the rate limiter handle burst traffic";
         let _ = parse_query(q2).unwrap();
         let q3 = "hyde: The rate limiter uses a sliding window algorithm with a 60-second window. When a client exceeds 100 requests per minute, subsequent requests return 429 Too Many Requests.";
