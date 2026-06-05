@@ -24,6 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.88.0
+          components: clippy
 
       - name: Install build dependencies for native crates (rusqlite bundled, tree-sitter, bindgen, cc)
         if: runner.os == 'Linux'
