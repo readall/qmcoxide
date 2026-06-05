@@ -1,5 +1,5 @@
 //! Formal SYNTAX EBNF query parser.
-//! Implements 100% of docs/SYNTAX.md for agent/CLI/MCP compat (structured queries, lex negation/phrase, intent, expand).
+//! Implements 100% of docs/SYNTAX.md for agent/CLI/MCP compat (structured queries, lex negation/phrase, intent, expand). Clean push to fix test data mangling.
 //! Used by CLI, MCP tools, search layer.
 //! Refs: task qmcoxide-o58.20 (P0), SYNTAX.md (EBNF + tables + examples), search_hybrid_query.feature, mcp.feature.
 //! No extra deps (use regex + manual for quoted/neg).
