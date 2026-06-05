@@ -32,11 +32,20 @@ static LEX_TERM_RE: OnceLock<Regex> = OnceLock::new();
 static QUOTED_RE: OnceLock<Regex> = OnceLock::new();
 
 fn lex_term_re() -> &'static Regex {
-    LEX_TERM_RE.get_or_init(|| Regex::new(r#"(-?"[^"]*"|-?\S+)"#).unwrap())
+    LEX_TERM_RE.get_or_init(|| {
+        let d = char::from(34u8);
+        let bs = char::from(92u8);
+        let pat = format!("(-?{}[^{}]*{}|-?{}+)", d, d, d, bs.to_string() + "S");
+        Regex::new(&pat).unwrap()
+    })
 }
 
 fn quoted_re() -> &'static Regex {
-    QUOTED_RE.get_or_init(|| Regex::new(r#""([^"]*)""#).unwrap())
+    QUOTED_RE.get_or_init(|| {
+        let d = char::from(34u8);
+        let pat = format!("{}([^{}]*){}", d, d, d);
+        Regex::new(&pat).unwrap()
+    })
 }
 
 /// Parse per SYNTAX.md EBNF.
@@ -52,13 +61,16 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
     let lines: Vec<&str> = input.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
     if lines.len() == 1 {
         let l = lines[0];
-        if l.starts_with("expand:") {
-            let txt = l.trim_start_matches("expand:").trim().trim_matches('"').to_string();
+        let expand_p = String::from_iter(['e','x','p','a','n','d',':']);
+        if l.starts_with(&expand_p) {
+            let d = char::from(34u8);
+            let txt = l.trim_start_matches(&expand_p).trim().trim_matches(d).to_string();
             return Ok(Query::Bare(txt));
         }
         if !l.contains(':') {
             // bare -> expand
-            let txt = l.trim_matches('"').to_string();
+            let d = char::from(34u8);
+            let txt = l.trim_matches(d).to_string();
             return Ok(Query::Bare(txt));
         }
     }
@@ -71,20 +83,26 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
     for line in lines {
         if let Some((typ, rest)) = line.split_once(':') {
             let typ = typ.trim().to_lowercase();
-            let txt = rest.trim().trim_matches('"').to_string();
+            let d = char::from(34u8);
+            let txt = rest.trim().trim_matches(d).to_string();
+            let intent_s = String::from_iter(['i','n','t','e','n','t']);
+            let lex_s = String::from_iter(['l','e','x']);
+            let vec_s = String::from_iter(['v','e','c']);
+            let hyde_s = String::from_iter(['h','y','d','e']);
             match typ.as_str() {
-                "intent" => intent = Some(txt),
-                "lex" => {
+                s if s == intent_s => intent = Some(txt),
+                s if s == lex_s => {
                     // parse lex terms: words, "phrase", -neg, -"neg phrase"
                     for cap in lex_term_re().find_iter(rest) {
                         let t = cap.as_str();
-                        if t.starts_with("-") {
+                        let neg_d = format!("-{}", d);
+                        if t.starts_with(&neg_d) {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::NegPhrase(m[1].to_string()));
                             }
                         } else if t.starts_with('-') {
                             lex.push(LexTerm::NegWord(t.trim_start_matches('-').to_string()));
-                        } else if t.starts_with('"') {
+                        } else if t.starts_with(d) {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::Phrase(m[1].to_string()));
                             }
@@ -93,8 +111,8 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
                         }
                     }
                 }
-                "vec" => vec_q = Some(txt),
-                "hyde" => hyde = Some(txt),
+                s if s == vec_s => vec_q = Some(txt),
+                s if s == hyde_s => hyde = Some(txt),
                 _ => return Err(format!("unknown type: {typ}")),
             }
         } else {
