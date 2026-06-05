@@ -7,8 +7,8 @@ use crate::config::load_config;
 use crate::llm::{LlamaCpp, EMBED_DIM};
 use crate::paths::make_docid;
 use rusqlite::{Connection, params};
-use md5::{Digest, Md5};
-use crate::paths::make_docid;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// Basic store (will grow to full QMDStore with search etc).
 pub struct Store {
@@ -82,12 +82,23 @@ impl Store {
         use glob::glob;
         let mut count = 0;
         let pat = format!("{}/{}", root.trim_end_matches('/'), pattern);
+        println!("DEBUG: Looking for files with pattern: {}", pat);
         if let Ok(entries) = glob(&pat) {
-            for entry in entries.filter_map(|e| e.ok()) {
+            let entries_vec: Vec<_> = entries.into_iter().collect();
+            println!("DEBUG: Found {} entries", entries_vec.len());
+            for entry in entries_vec.into_iter().filter_map(|e| e.ok()) {
                 let path_str = entry.to_string_lossy().to_string();
-                if path_str.contains("/.git/") || path_str.ends_with("/.gitignore") { continue; } // basic .gitignore + git skip (full .gitignore parse in glob task)
+                println!("DEBUG: Processing entry: {}", path_str);
+                if path_str.contains("/.git/") || path_str.ends_with("/.gitignore") { 
+                    println!("DEBUG: Skipping .git entry");
+                    continue; 
+                } // basic .gitignore + git skip (full .gitignore parse in glob task)
                 if let Ok(content) = std::fs::read_to_string(&entry) {
-                    if content.trim().is_empty() { continue; } // graceful skip empty
+                    if content.trim().is_empty() { 
+                        println!("DEBUG: Skipping empty content");
+                        continue; 
+                    } // graceful skip empty
+                    println!("DEBUG: Processing content of length {}", content.len());
                     let chunks = crate::chunk::chunk_document(&content, crate::chunk::ChunkStrategy::Regex);
                     let doc_hash = make_docid(&content);
                     // frontmatter title (YAML style --- title: foo) or H1 fallback for parity with original
@@ -97,9 +108,11 @@ impl Store {
                     let mut stmt = self.db.prepare("SELECT hash FROM documents WHERE collection=?1 AND path=?2").expect("prep fp check");
                     if let Ok(existing) = stmt.query_row(params![collection, &path_str], |r| r.get::<_, String>(0)) {
                         if existing == doc_hash {
+                            println!("DEBUG: Skipping unchanged document: {}", path_str);
                             continue; // unchanged
                         }
                     }
+                    println!("DEBUG: Inserting document: {}", path_str);
                     // Insert document + full body for get --full
                     self.db.execute(
                         "INSERT OR REPLACE INTO documents (collection, path, hash, title, active, last_modified) VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
@@ -126,9 +139,14 @@ impl Store {
                         ).expect("insert chunks_fts");
                     }
                     count += 1;  // per doc
+                } else {
+                    println!("DEBUG: Failed to read file: {}", entry.to_string_lossy());
                 }
             }
+        } else {
+            println!("DEBUG: Glob pattern failed: {}", pat);
         }
+        println!("DEBUG: Update complete, processed {} documents", count);
         count
     }
 
@@ -279,14 +297,11 @@ impl Store {
             let embeddings = llm.embed_batch(&prompts);
             
             // Generate fingerprint for this embedding operation (model + params based)
-            let mut hasher = Md5::new();
-            hasher.update(format!(
-                "{}:{}:{}", 
-                crate::llm::DEFAULT_EMBED_MODEL,
-                EMBED_DIM,
-                strategy as u8
-            ).as_bytes());
-            let fingerprint = format!("{:x}", hasher.finalize());
+            let mut hasher = DefaultHasher::new();
+            (crate::llm::DEFAULT_EMBED_MODEL as &str).hash(&mut hasher);
+            EMBED_DIM.hash(&mut hasher);
+            (strategy as u8).hash(&mut hasher);
+            let fingerprint = format!("{:x}", hasher.finish());
             
             // Store chunks and embeddings
             for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
@@ -307,9 +322,15 @@ impl Store {
                 ).expect("insert chunk");
                 
                 // Store vector in vectors_vec (hash_seq = doc_hash_chunk_index)
+                // Convert Vec<f32> to Vec<u8> for storage
+                let mut embedding_bytes = Vec::with_capacity(embedding.len() * 4);
+                for &val in embedding.iter() {
+                    embedding_bytes.extend_from_slice(&val.to_le_bytes());
+                }
+                
                 self.db.execute(
                     "INSERT OR REPLACE INTO vectors_vec (hash_seq, embedding) VALUES (?1, ?2)",
-                    params![&chunk_hash, &embedding]
+                    params![&chunk_hash, &embedding_bytes]
                 ).expect("insert vector");
             }
             

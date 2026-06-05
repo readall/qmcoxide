@@ -33,7 +33,7 @@ sha2 = "0.10"  # for content hashes / docids
 dirs = "5"  # XDG cache/config (~/.cache/qmd , ~/.config/qmd per compat decision)
 glob = "0.3"  # collection patterns (picomatch-like)
 chrono = { version = "0.4", features = ["serde"] }  # for timestamps in bench output
-md5 = "0.7"  # for fingerprint generation
+md5 = "0.8.0"  # for fingerprint generation
 
 # For model downloads from HF (exact GGUF URIs for embed/rerank/expand parity with original qmd; cache ~/.cache/qmd/models)
 # Gated behind "llm" feature (core for parity but native build on Windows requires clean MSVC link.exe PATH; cargo check --lib succeeds without; see README Windows note, AGENTS).

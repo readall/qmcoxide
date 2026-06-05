@@ -5,6 +5,7 @@
 
 use clap::{Parser, Subcommand};
 use crate::syntax::parse_query;  // for structured query support in search/query/vsearch (now available from parser task)
+use rusqlite::params;
 
 #[derive(Parser, Debug)]
 #[command(name = "qmd", version, about = "qmd (Rust port) - on-device hybrid search")]
@@ -173,6 +174,7 @@ pub fn run(cli: Cli) {
         .join("qmd/index.sqlite")
         .to_string_lossy()
         .to_string();
+    println!("DEBUG: Using database path: {}", db_path);
     let mut store = crate::store::create_store(&db_path);
 
     match &cli.command {
@@ -231,7 +233,7 @@ pub fn run(cli: Cli) {
           Commands::Bench { fixture, json } => {
               // Implement bench command to run metrics on fixture
               println!("Running bench on fixture: {}", fixture);
-              if json {
+              if *json {
                   println!("{}", serde_json::json!({
                       "fixture": fixture,
                       "timestamp": chrono::Utc::now().to_rfc3339(),
@@ -252,17 +254,38 @@ pub fn run(cli: Cli) {
                   println!("Note: Bench implementation pending - returning placeholder values");
               }
           },
-           Commands::Embed { collection, force, chunk_strategy } => {
-               // Implement embed command with full functionality
-               let coll = collection.as_deref().unwrap_or("default");
-               println!("Running embed on collection: {}", coll);
-               println!("  Force: {}", force);
-               println!("  Chunk strategy: {}", chunk_strategy.as_deref().unwrap_or("default"));
-               
-               let embedded_count = store.embed(coll, force, chunk_strategy);
-               println!("Embedded {} documents", embedded_count);
-           },
-          Commands::Ls { prefix } => {
+            Commands::Embed { collection, force, chunk_strategy } => {
+                // Implement embed command with full functionality
+                let coll = collection.as_deref().unwrap_or("default");
+                println!("Running embed on collection: {}", coll);
+                println!("  Force: {}", force);
+                println!("  Chunk strategy: {}", chunk_strategy.as_deref().unwrap_or("default"));
+                
+                let embedded_count = store.embed(coll, *force, chunk_strategy.clone());
+                println!("Embedded {} documents", embedded_count);
+            },
+            Commands::Update { collection, force } => {
+                // Implement update command
+                let coll = collection.as_deref().unwrap_or("default");
+                println!("Running update on collection: {}", coll);
+                println!("  Force: {}", force);
+
+                // Get the collection configuration from the store
+                let collections = store.list_collections();
+                let mut root = String::from(".");
+                let mut pattern = String::from("**/*.md");
+                for (name, path, pat, _) in collections {
+                    if name == coll {
+                        root = path.clone();
+                        pattern = pat.clone();
+                        break;
+                    }
+                }
+
+                let updated_count = store.update(coll, &root, &pattern);
+                println!("Updated {} documents", updated_count);
+            },
+           Commands::Ls { prefix } => {
             let p = prefix.as_deref().unwrap_or("");
             for path in store.ls(p) {
                 println!("{}", path);
@@ -275,16 +298,16 @@ pub fn run(cli: Cli) {
               println!("qmd status");
               println!("Collections: {}", collections.len());
               
-              for (name, path, pattern, include) in collections {
+              for (name, path, pattern, include) in &collections {
                   // Get document count for this collection
-                  let count_stmt = store.db.prepare(
-                      "SELECT COUNT(*) FROM documents WHERE collection = ?1"
-                  ).expect("prepare count");
-                  
-                  let count: i64 = count_stmt.query_row(params![name], |r| r.get(0))
-                      .unwrap_or(0);
+                   let mut count_stmt = store.db.prepare(
+                       "SELECT COUNT(*) FROM documents WHERE collection = ?1"
+                   ).expect("prepare count");
+                   
+                   let count: i64 = count_stmt.query_row(params![name], |r| r.get(0))
+                       .unwrap_or(0);
                       
-                  println!("  {}: {} docs (active={})", name, count, if include == 1 { "yes" } else { "no" });
+                   println!("  {}: {} docs (active={})", name, count, if *include == 1 { "yes" } else { "no" });
                   println!("    path: {}", path);
                   println!("    pattern: {}", pattern);
               }
@@ -295,39 +318,39 @@ pub fn run(cli: Cli) {
               
               // TODO: Add health info (from maintenance) and last embed timestamp
           },
-          Commands::Cleanup => {
-              // Implement cleanup command to remove orphaned documents
-              println!("Running cleanup: removing orphaned documents...");
-              
-              // Get all document paths from the database
-              let mut paths_stmt = store.db.prepare(
-                  "SELECT path FROM documents WHERE active = 1"
-              ).expect("prepare paths");
-              
-              let db_paths: Vec<String> = paths_stmt.query_map([], |r| r.get(0))
-                  .expect("query paths")
-                  .collect::<Result<Vec<_>, _>>()
-                  .expect("collect paths");
-              
-              // Check which files exist on filesystem
-              let mut orphaned = 0;
-              for path in db_paths {
-                  if !std::path::Path::new(&path).exists() {
-                      // Mark as inactive (soft delete per requirements)
-                      let update_stmt = store.db.prepare(
-                          "UPDATE documents SET active = 0 WHERE path = ?1"
-                      ).expect("prepare update");
-                      
-                      update_stmt.execute(params![&path])
-                          .expect("execute update");
-                      
-                      orphaned += 1;
-                      println!("  Marked as inactive: {}", path);
-                  }
-              }
-              
-              println!("Cleanup complete. {} documents marked as inactive.", orphaned);
-          },
+           Commands::Cleanup => {
+               // Implement cleanup command to remove orphaned documents
+               println!("Running cleanup: removing orphaned documents...");
+               
+               // Get all document paths from the database
+               let mut paths_stmt = store.db.prepare(
+                   "SELECT path FROM documents WHERE active = 1"
+               ).expect("prepare paths");
+               
+               let db_paths: Vec<String> = paths_stmt.query_map([], |r| r.get(0))
+                   .expect("query paths")
+                   .collect::<Result<Vec<_>, _>>()
+                   .expect("collect paths");
+               
+               // Check which files exist on filesystem
+               let mut orphaned = 0;
+               for path in db_paths {
+                   if !std::path::Path::new(&path).exists() {
+                       // Mark as inactive (soft delete per requirements)
+                       let mut update_stmt = store.db.prepare(
+                           "UPDATE documents SET active = 0 WHERE path = ?1"
+                       ).expect("prepare update");
+                       
+                       update_stmt.execute(params![&path])
+                           .expect("execute update");
+                       
+                       orphaned += 1;
+                       println!("  Marked as inactive: {}", path);
+                   }
+               }
+               
+               println!("Cleanup complete. {} documents marked as inactive.", orphaned);
+           },
           Commands::Vacuum => {
               // Implement vacuum command
               println!("Running vacuum: optimizing database...");
