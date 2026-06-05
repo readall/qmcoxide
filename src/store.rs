@@ -27,7 +27,7 @@ pub fn create_store(db_path: &str /* , options: StoreOptions */) -> Store {
 fn extract_title(content: &str) -> String {
     // frontmatter --- \n title: Foo \n --- for parity with original frontmatter title support
     if content.starts_with("---") {
-        if let Some(end) = content[3..].find("---") {
+        if let Some(end) = content.strip_prefix("---").unwrap().find("---") {
             let fm = &content[3..3+end];
             for line in fm.lines() {
                 if let Some(v) = line.strip_prefix("title:") {
@@ -82,13 +82,13 @@ impl Store {
         use glob::glob;
         let mut count = 0;
         let pat = format!("{}/{}", root.trim_end_matches('/'), pattern);
-        println!("DEBUG: Looking for files with pattern: {}", pat);
+        println!("DEBUG: Looking for files with pattern: {pat}");
         if let Ok(entries) = glob(&pat) {
             let entries_vec: Vec<_> = entries.into_iter().collect();
             println!("DEBUG: Found {} entries", entries_vec.len());
             for entry in entries_vec.into_iter().filter_map(|e| e.ok()) {
                 let path_str = entry.to_string_lossy().to_string();
-                println!("DEBUG: Processing entry: {}", path_str);
+                println!("DEBUG: Processing entry: {path_str}");
                 if path_str.contains("/.git/") || path_str.ends_with("/.gitignore") { 
                     println!("DEBUG: Skipping .git entry");
                     continue; 
@@ -108,11 +108,11 @@ impl Store {
                     let mut stmt = self.db.prepare("SELECT hash FROM documents WHERE collection=?1 AND path=?2").expect("prep fp check");
                     if let Ok(existing) = stmt.query_row(params![collection, &path_str], |r| r.get::<_, String>(0)) {
                         if existing == doc_hash {
-                            println!("DEBUG: Skipping unchanged document: {}", path_str);
+                            println!("DEBUG: Skipping unchanged document: {path_str}");
                             continue; // unchanged
                         }
                     }
-                    println!("DEBUG: Inserting document: {}", path_str);
+                    println!("DEBUG: Inserting document: {path_str}");
                     // Insert document + full body for get --full
                     self.db.execute(
                         "INSERT OR REPLACE INTO documents (collection, path, hash, title, active, last_modified) VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
@@ -144,9 +144,9 @@ impl Store {
                 }
             }
         } else {
-            println!("DEBUG: Glob pattern failed: {}", pat);
+            println!("DEBUG: Glob pattern failed: {pat}");
         }
-        println!("DEBUG: Update complete, processed {} documents", count);
+        println!("DEBUG: Update complete, processed {count} documents");
         count
     }
 
@@ -258,7 +258,7 @@ impl Store {
         .expect("collect docs");
         
         if docs.is_empty() {
-            println!("No documents need embedding in collection '{}'", collection);
+            println!("No documents need embedding in collection '{collection}'");
             return 0;
         }
         
@@ -279,7 +279,7 @@ impl Store {
         
         // Process each document
         for (path, doc_hash, content) in docs {
-            println!("  Processing: {}", path);
+            println!("  Processing: {path}");
             
             // Chunk the document
             let chunks = chunk_document(&content, strategy);
@@ -305,7 +305,7 @@ impl Store {
             
             // Store chunks and embeddings
             for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
-                let chunk_hash = format!("{}_{:03}", doc_hash, i);
+                let chunk_hash = format!("{doc_hash}_{i:03}");
                 
                 // Store chunk with embedding reference
                 self.db.execute(
@@ -345,7 +345,7 @@ impl Store {
         }
         
         let duration = start.elapsed();
-        println!("Embed complete: {} documents embedded in {:.2?}", embedded_count, duration);
+        println!("Embed complete: {embedded_count} documents embedded in {duration:.2?}");
         embedded_count
     }
 

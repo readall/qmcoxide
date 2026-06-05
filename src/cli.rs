@@ -174,7 +174,7 @@ pub fn run(cli: Cli) {
         .join("qmd/index.sqlite")
         .to_string_lossy()
         .to_string();
-    println!("DEBUG: Using database path: {}", db_path);
+    println!("DEBUG: Using database path: {db_path}");
     let mut store = crate::store::create_store(&db_path);
 
     match &cli.command {
@@ -182,7 +182,7 @@ pub fn run(cli: Cli) {
             // Full store.get for path/#docid/qmd:// + ranges + full + suggestions. Matches retrieval_get_multi.feature + original parity.
             // User: `cargo run -- get docs/foo.md:1:10 --full-path` or `cargo run -- get "#abc123"`
             let spec = path_or_docid.as_str();
-            if let Some(body) = store.get(spec, *full, from_line.clone(), max_lines.clone()) {
+            if let Some(body) = store.get(spec, *full, *from_line, *max_lines) {
                 let use_full = *full_path;
                 // For display path, use spec as-is for qmd:// or #, or full fs for --full-path
                 let disp = if use_full {
@@ -194,7 +194,7 @@ pub fn run(cli: Cli) {
                 println!("{disp}\n{body}");
             } else {
                 let similar = store.suggest_similar(spec, None);
-                println!("DocumentNotFound for {spec}; similar: {:?}", similar);
+                println!("DocumentNotFound for {spec}; similar: {similar:?}");
             }
         }
         Commands::Query { query, json, explain, .. } => {
@@ -212,7 +212,7 @@ pub fn run(cli: Cli) {
                 let n = name.as_deref().unwrap_or("default");
                 let m = mask.as_deref().unwrap_or("**/*.md");
                 store.add_collection(n, path, m, "", 1, None);
-                println!("collection added: {} @ {} (mask {}) -- run `cargo run -- update --force` to index", n, path, m);
+                println!("collection added: {n} @ {path} (mask {m}) -- run `cargo run -- update --force` to index");
             }
             CollectionAction::List => {
                 for (name, path, pattern, inc) in store.list_collections() {
@@ -221,18 +221,18 @@ pub fn run(cli: Cli) {
             }
             CollectionAction::Remove { name } => {
                 store.remove_collection(name);
-                println!("collection removed: {}", name);
+                println!("collection removed: {name}");
             }
             CollectionAction::Rename { old, new } => {
                 store.rename_collection(old, new);
-                println!("collection renamed: {} -> {}", old, new);
+                println!("collection renamed: {old} -> {new}");
             }
         },
         Commands::Mcp { http, port, daemon } => println!("mcp http={http} port={port:?} daemon={daemon} // run `cargo run -- mcp --http --port {port:?}`"),
         Commands::Doctor { json } => crate::maintenance::run_doctor(*json),
           Commands::Bench { fixture, json } => {
               // Implement bench command to run metrics on fixture
-              println!("Running bench on fixture: {}", fixture);
+              println!("Running bench on fixture: {fixture}");
               if *json {
                   println!("{}", serde_json::json!({
                       "fixture": fixture,
@@ -246,7 +246,7 @@ pub fn run(cli: Cli) {
                       }
                   }));
               } else {
-                  println!("Bench results for {}:", fixture);
+                  println!("Bench results for {fixture}:");
                   println!("  Precision@K: 0.0");
                   println!("  Recall: 0.0");
                   println!("  MRR: 0.0");
@@ -257,17 +257,17 @@ pub fn run(cli: Cli) {
             Commands::Embed { collection, force, chunk_strategy } => {
                 // Implement embed command with full functionality
                 let coll = collection.as_deref().unwrap_or("default");
-                println!("Running embed on collection: {}", coll);
-                println!("  Force: {}", force);
+                println!("Running embed on collection: {coll}");
+                println!("  Force: {force}");
                 println!("  Chunk strategy: {}", chunk_strategy.as_deref().unwrap_or("default"));
                 
                 let embedded_count = store.embed(coll, *force, chunk_strategy.clone());
-                println!("Embedded {} documents", embedded_count);
+                println!("Embedded {embedded_count} documents");
             },
             Commands::Update { collection, force } => {
                 // Implement update command
                 let coll = collection.as_deref().unwrap_or("default");
-                println!("Running update on collection: {}", coll);
+                println!("Running update on collection: {coll}");
                 println!("  Force: {}", force);
 
                 // Get the collection configuration from the store
