@@ -92,6 +92,39 @@ pub fn run_doctor(json: bool) {
         "no default index found (.qmd/index.sqlite or ~/.cache/qmd/index.sqlite)".to_string()
     };
 
+    // Health check: count orphaned/inactive documents
+    let health_status = if let Some(dbp) = find_default_db() {
+        match rusqlite::Connection::open(&dbp) {
+            Ok(conn) => {
+                // Count total documents
+                let total_docs: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM documents", 
+                    [], 
+                    |row| row.get(0)
+                ).unwrap_or(0);
+                
+                // Count active documents
+                let active_docs: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM documents WHERE active = 1", 
+                    [], 
+                    |row| row.get(0)
+                ).unwrap_or(0);
+                
+                // Count inactive documents (potential orphans)
+                let inactive_docs = total_docs - active_docs;
+                
+                if inactive_docs > 0 {
+                    format!("HEALTH_OK ({} active, {} inactive/orphaned documents)", active_docs, inactive_docs)
+                } else {
+                    format!("HEALTH_OK ({} active documents, no orphans)", active_docs)
+                }
+            }
+            Err(e) => format!("HEALTH_CHECK_FAILED: could not open index: {}", e),
+        }
+    } else {
+        "HEALTH_UNKNOWN: no index found".to_string()
+    };
+
     // Device / GPU probe (safe, only if env flag; gated on llm feature for real llama probe)
     let device = if std::env::var("QMD_DOCTOR_DEVICE_PROBE").ok().as_deref() == Some("1") {
         #[cfg(feature = "llm")]
@@ -145,7 +178,12 @@ pub fn run_doctor(json: bool) {
     };
 
     if json {
-        match serde_json::to_string_pretty(&report) {
+        // Add health info to JSON output
+        let mut json_report = serde_json::to_value(&report).expect("serialize report");
+        if let Some(obj) = json_report.as_object_mut() {
+            obj.insert("health".to_string(), serde_json::Value::String(health_status.clone()));
+        }
+        match serde_json::to_string_pretty(&json_report) {
             Ok(s) => println!("{s}"),
             Err(e) => eprintln!("json error: {e}"),
         }
@@ -155,6 +193,7 @@ pub fn run_doctor(json: bool) {
         println!("vec extension: {}", report.vec_extension);
         println!("model cache: {}", report.model_cache);
         println!("fingerprints: {}", report.fingerprints);
+        println!("health: {}", health_status);
         println!("device/GPU: {}", report.device);
         println!("env overrides (QMD_*/GGML_*/LLAMA_*):");
         if report.env_overrides.is_empty() {
