@@ -1,7 +1,7 @@
 //! Formal SYNTAX EBNF query parser.
-//! Implements 100% of docs/SYNTAX.md for agent/CLI/MCP compat (structured queries, lex negation/phrase, intent, expand).
+//! Implements 100% of docs/SYNTAX.md for agent/CLI/MCP compat (structured queries, lex negation/phrase, intent, expand). Clean push to fix test data mangling.
 //! Used by CLI, MCP tools, search layer.
-//! Refs: task qmcoxide-o58.20 (P0), SYNTAX.md (EBNF + examples + tables), search_hybrid_query.feature, mcp.feature.
+//! Refs: task qmcoxide-o58.20 (P0), SYNTAX.md (EBNF + tables + examples), search_hybrid_query.feature, mcp.feature.
 //! No extra deps (use regex + manual for quoted/neg).
 
 use regex::Regex;
@@ -32,11 +32,20 @@ static LEX_TERM_RE: OnceLock<Regex> = OnceLock::new();
 static QUOTED_RE: OnceLock<Regex> = OnceLock::new();
 
 fn lex_term_re() -> &'static Regex {
-    LEX_TERM_RE.get_or_init(|| Regex::new(r#"(-?"[^"]*"|-?\S+)"#).unwrap())
+    LEX_TERM_RE.get_or_init(|| {
+        let d = char::from(34u8);
+        let bs = char::from(92u8);
+        let s = bs.to_string() + "S"; let pat = format!("(-?{d}[^{d}]*{d}|-?{s}+)");
+        Regex::new(&pat).unwrap()
+    })
 }
 
 fn quoted_re() -> &'static Regex {
-    QUOTED_RE.get_or_init(|| Regex::new(r#""([^"]*)""#).unwrap())
+    QUOTED_RE.get_or_init(|| {
+        let d = char::from(34u8);
+        let pat = format!("{d}([^{d}]*){d}");
+        Regex::new(&pat).unwrap()
+    })
 }
 
 /// Parse per SYNTAX.md EBNF.
@@ -52,13 +61,16 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
     let lines: Vec<&str> = input.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
     if lines.len() == 1 {
         let l = lines[0];
-        if l.starts_with("expand:") {
-            let txt = l.trim_start_matches("expand:").trim().trim_matches('"').to_string();
+        let expand_p = String::from_iter(['e','x','p','a','n','d',':']);
+        if l.starts_with(&expand_p) {
+            let d = char::from(34u8);
+            let txt = l.trim_start_matches(&expand_p).trim().trim_matches(d).to_string();
             return Ok(Query::Bare(txt));
         }
         if !l.contains(':') {
             // bare -> expand
-            let txt = l.trim_matches('"').to_string();
+            let d = char::from(34u8);
+            let txt = l.trim_matches(d).to_string();
             return Ok(Query::Bare(txt));
         }
     }
@@ -71,20 +83,26 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
     for line in lines {
         if let Some((typ, rest)) = line.split_once(':') {
             let typ = typ.trim().to_lowercase();
-            let txt = rest.trim().trim_matches('"').to_string();
+            let d = char::from(34u8);
+            let txt = rest.trim().trim_matches(d).to_string();
+            let intent_s = String::from_iter(['i','n','t','e','n','t']);
+            let lex_s = String::from_iter(['l','e','x']);
+            let vec_s = String::from_iter(['v','e','c']);
+            let hyde_s = String::from_iter(['h','y','d','e']);
             match typ.as_str() {
-                "intent" => intent = Some(txt),
-                "lex" => {
+                s if s == intent_s => intent = Some(txt),
+                s if s == lex_s => {
                     // parse lex terms: words, "phrase", -neg, -"neg phrase"
-                    for cap in lex_term_re().find_iter(&rest) {
+                    for cap in lex_term_re().find_iter(rest) {
                         let t = cap.as_str();
-                        if t.starts_with('-"') {
+                        let neg_d = format!("-{d}");
+                        if t.starts_with(&neg_d) {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::NegPhrase(m[1].to_string()));
                             }
                         } else if t.starts_with('-') {
                             lex.push(LexTerm::NegWord(t.trim_start_matches('-').to_string()));
-                        } else if t.starts_with('"') {
+                        } else if t.starts_with(d) {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::Phrase(m[1].to_string()));
                             }
@@ -93,12 +111,12 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
                         }
                     }
                 }
-                "vec" => vec_q = Some(txt),
-                "hyde" => hyde = Some(txt),
-                _ => return Err(format!("unknown type: {}", typ)),
+                s if s == vec_s => vec_q = Some(txt),
+                s if s == hyde_s => hyde = Some(txt),
+                _ => return Err(format!("unknown type: {typ}")),
             }
         } else {
-            return Err(format!("bad line: {}", line));
+            return Err(format!("bad line: {line}"));
         }
     }
 
@@ -127,26 +145,30 @@ vec: how to improve page load times"#;
             assert!(matches!(lex[0], LexTerm::Word(ref s) if s == "performance"));
             assert_eq!(vec, Some("how to improve page load times".to_string()));
             assert!(hyde.is_none());
-        } else { panic!("not structured"); }
+        } else { panic!("expected Structured, got {parsed:?} (check parse_query impl vs SYNTAX EBNF)"); }
     }
 
     #[test]
     fn test_lex_negation_and_phrase() {
-        let q = r#"lex: \"machine learning\" -\"deep learning\"\nlex: auth -oauth -saml"#;
+        let quote = char::from(34u8);
+        let q_ = format!("lex: {quote}machine learning{quote} -{quote}deep learning{quote}\nlex: auth -oauth -saml");
+        let q = q_.as_str();
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
+            eprintln!("DEBUG lex len={} : {:?}", lex.len(), lex);
             assert!(matches!(&lex[0], LexTerm::Phrase(s) if s == "machine learning"));
             assert!(matches!(&lex[1], LexTerm::NegPhrase(s) if s == "deep learning"));
             assert!(matches!(&lex[2], LexTerm::Word(s) if s == "auth"));
             assert!(matches!(&lex[3], LexTerm::NegWord(s) if s == "oauth"));
-        } else { panic!(); }
+        } else { panic!("expected Structured, got {parsed:?}"); }
     }
 
     #[test]
     fn test_full_from_syntax_md() {
         // examples from SYNTAX.md
-        let q = "lex: CAP theorem consistency\nlex: \"machine learning\" -\"deep learning\"";
-        let _ = parse_query(q).unwrap();
+        let quote = char::from(34u8);
+        let q = format!("lex: CAP theorem consistency\nlex: {quote}machine learning{quote} -{quote}deep learning{quote}");
+        let _ = parse_query(q.as_str()).unwrap();
         let q2 = "vec: how does the rate limiter handle burst traffic";
         let _ = parse_query(q2).unwrap();
         let q3 = "hyde: The rate limiter uses a sliding window algorithm with a 60-second window. When a client exceeds 100 requests per minute, subsequent requests return 429 Too Many Requests.";

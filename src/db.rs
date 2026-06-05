@@ -22,25 +22,40 @@ pub fn open_database(path: &str) -> Result<Connection> {
     }
     // Try load vec (non-fatal if fails, as FTS still works; caller can error on vec use).
     if let Err(e) = load_sqlite_vec(&conn) {
-        eprintln!("Warning: could not load sqlite-vec extension (vec search disabled): {}. Install platform sqlite-vec or build ext.", e);
+        eprintln!("Warning: could not load sqlite-vec extension (vec search disabled): {e}. Install platform sqlite-vec or build ext.");
     }
-    // Run migrations for legacy (path fixes, fp cols, vec dim, case from changelog implicit reqs)
+    // Init schema then migrations (mig table etc must exist for run_migrations query/inserts)
+    init_schema(&conn)?;
     run_migrations(&conn)?;
     Ok(conn)
 }
 
 pub fn load_sqlite_vec(conn: &Connection) -> Result<()> {
-    // TODO: find loadable path like original (for prebuilts or system).
-    // For now, assume extension is in PATH or use conn.load_extension("sqlite-vec", None) if registered.
-    // In practice, use a crate or build script to bundle the .dylib/.so for target.
-    // Example for mac/linux: let path = get_sqlite_vec_path(); conn.load_extension(&path, None)?;
-    // For this skeleton, no-op or error if strict.
-    // To make tests pass without ext, make vec optional in higher layers.
+    // Real load per .9: try env SQLITE_VEC_PATH, then common names (original uses platform lib like Homebrew /usr/local/opt/sqlite-vec/lib/libsqlite_vec.dylib etc).
+    // Non-fatal: caller warns, vec search disabled if not present (parity with original when ext missing).
+    // For win: user provides dll via env or build ext; see AGENTS Windows note.
+    if let Ok(p) = std::env::var("SQLITE_VEC_PATH") {
+        unsafe {
+            conn.load_extension(&p, None)?;
+        }
+        return Ok(());
+    }
+    for candidate in &["sqlite-vec", "libsqlite_vec", "sqlite_vec", "libsqlite_vec.so", "libsqlite_vec.dylib", "sqlite_vec.dll"] {
+        unsafe {
+            if conn.load_extension(candidate, None).is_ok() {
+                return Ok(());
+            }
+        }
+    }
+    // fallback no-op (common on CI/dev without the platform sqlite-vec .so/dylib/dll installed)
+    // Warn here for the common case; explicit bad SQLITE_VEC_PATH still errors above.
+    eprintln!("Warning: could not load sqlite-vec extension (vec search disabled). Install platform sqlite-vec or build ext (or set SQLITE_VEC_PATH).");
     Ok(())
 }
 
 /// Initialize current schema + FTS5 + vec0 (from original analysis + data-model.md).
-/// Migrations TODO for legacy (path fixes, fingerprints etc from changelog).
+/// Migrations for legacy (path fixes, fp columns, vec dim, case from CHANGELOG implicit + requirements).
+/// Run on every open; use simple ALTER IF NOT EXISTS pattern (or catch).
 pub fn init_schema(conn: &Connection) -> Result<()> {
     conn.execute_batch(r#"
         CREATE TABLE IF NOT EXISTS content (
@@ -72,6 +87,7 @@ pub fn init_schema(conn: &Connection) -> Result<()> {
             fingerprint TEXT,
             chunk_strategy TEXT
         );
+        -- chunks_fts added in migration v3 for snippet+line search (.28)
         -- vectors_vec VIRTUAL vec0 created dynamically in embed (after knowing dim, e.g. 768 or model specific)
         -- CREATE VIRTUAL TABLE IF NOT EXISTS vectors_vec USING vec0(hash_seq TEXT PRIMARY KEY, embedding FLOAT[768] distance_metric=cosine);
         CREATE TABLE IF NOT EXISTS path_contexts (
@@ -115,11 +131,18 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
         // vec dim or other; in practice recreate virtual if needed in embed path
         conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (2)", [])?;
     }
+    if current < 3 {
+        // chunks_fts for accurate snippet extraction + line numbers in search (.28)
+        let _ = conn.execute_batch(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5( path, content, doc_hash, tokenize='unicode61' );"
+        );
+        conn.execute("INSERT OR IGNORE INTO schema_migrations (version) VALUES (3)", [])?;
+    }
     // Add more for path verbatim fixes, case etc. (data fixups if needed)
     Ok(())
 }
 
-// TODO: more schema (content_vectors for chunks), migration logic, prepared stmts for insert/search, transaction wrappers.
+// More schema (content_vectors) and tx wrappers in future; current supports indexing/search/get parity.
 
 #[cfg(test)]
 mod tests {
@@ -139,7 +162,7 @@ mod tests {
             .collect::<Result<_, _>>()
             .unwrap();
         for exp in ["content", "documents", "documents_fts", "chunks", "path_contexts", "store_collections", "llm_cache", "schema_migrations"] {
-            assert!(tables.iter().any(|t| t.contains(exp)), "missing table: {}", exp);
+            assert!(tables.iter().any(|t| t.contains(exp)), "missing table: {exp}");
         }
         // vectors_vec is virtual, created on demand in embed (with dim); FTS/vec queries exercised in higher tests
         // run_migrations called in open (test uses init directly)

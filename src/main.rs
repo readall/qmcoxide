@@ -2,10 +2,7 @@
 //! On-device hybrid search for markdown notes, docs, transcripts, and code.
 //! See plan.md (session) / docs/DESIGN.md , docs/requirements.md + specs/features/*.feature for full specs.
 
-use std::env;
-
-mod cli; // clap dispatch, formatters etc.
-use clap::Parser; // for Cli::parse() on the derived type from mod cli
+use clap::Parser; // for qmcoxide::cli::Cli::parse() (trait for the derive in lib)
 
 
 fn main() {
@@ -33,6 +30,6 @@ fn main() {
         // etc for other
     }
 
-    let cli = cli::Cli::parse();
-    cli::run(cli);
+    let cli = qmcoxide::cli::Cli::parse();
+    qmcoxide::cli::run(cli);
 }
