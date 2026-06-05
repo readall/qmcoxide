@@ -228,31 +228,47 @@ pub fn run(cli: Cli) {
         },
         Commands::Mcp { http, port, daemon } => println!("mcp http={http} port={port:?} daemon={daemon} // run `cargo run -- mcp --http --port {port:?}`"),
         Commands::Doctor { json } => crate::maintenance::run_doctor(*json),
-         Commands::Bench { fixture, json } => {
-             // Implement bench command to run metrics on fixture
-             println!("Running bench on fixture: {}", fixture);
-             if json {
-                 println!("{}", serde_json::json!({
-                     "fixture": fixture,
-                     "timestamp": chrono::Utc::now().to_rfc3339(),
-                     "results": [],
-                     "summary": {
-                         "precision_at_k": 0.0,
-                         "recall": 0.0,
-                         "mrr": 0.0,
-                         "f1": 0.0
-                     }
-                 }));
-             } else {
-                 println!("Bench results for {}:", fixture);
-                 println!("  Precision@K: 0.0");
-                 println!("  Recall: 0.0");
-                 println!("  MRR: 0.0");
-                 println!("  F1: 0.0");
-                 println!("Note: Bench implementation pending - returning placeholder values");
-             }
-         },
-        Commands::Ls { prefix } => {
+          Commands::Bench { fixture, json } => {
+              // Implement bench command to run metrics on fixture
+              println!("Running bench on fixture: {}", fixture);
+              if json {
+                  println!("{}", serde_json::json!({
+                      "fixture": fixture,
+                      "timestamp": chrono::Utc::now().to_rfc3339(),
+                      "results": [],
+                      "summary": {
+                          "precision_at_k": 0.0,
+                          "recall": 0.0,
+                          "mrr": 0.0,
+                          "f1": 0.0
+                      }
+                  }));
+              } else {
+                  println!("Bench results for {}:", fixture);
+                  println!("  Precision@K: 0.0");
+                  println!("  Recall: 0.0");
+                  println!("  MRR: 0.0");
+                  println!("  F1: 0.0");
+                  println!("Note: Bench implementation pending - returning placeholder values");
+              }
+          },
+          Commands::Embed { collection, force, chunk_strategy } => {
+              // Implement embed command with full functionality
+              let coll = collection.as_deref().unwrap_or("default");
+              println!("Running embed on collection: {}", coll);
+              println!("  Force: {}", force);
+              println!("  Chunk strategy: {}", chunk_strategy.as_deref().unwrap_or("default"));
+              
+              // TODO: Implement actual embedding logic:
+              // 1. Load documents from collection
+              // 2. Chunk documents based on strategy (regex/auto)
+              // 3. Generate embeddings using LLM
+              // 4. Store embeddings with fingerprints
+              // 5. Handle partial recovery and model switching
+              
+              println!("Note: Embed implementation pending - this is a placeholder");
+          },
+          Commands::Ls { prefix } => {
             let p = prefix.as_deref().unwrap_or("");
             for path in store.ls(p) {
                 println!("{}", path);

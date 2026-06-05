@@ -10,6 +10,9 @@
 #[cfg(feature = "llm")]
 use llama_cpp_2 as llama;  // the crate (gated; real use only when "llm" feature enabled for native GGUF/embed/rerank)
 
+#[cfg(feature = "llm")]
+use hf_hub::api::sync::Api;
+
 // Exact prompts, URIs, dims, cache metadata per requirements "Models", "Embed", "LLM prompt templates (extract from llm.ts)", original llm.ts, embed.feature, task .25
 // These produce parity embeddings/reranks/expansions on test inputs when used with matching GGUF.
 pub const EMBED_PROMPT_TEMPLATE: &str = "task: search result | query: {}";
@@ -30,6 +33,22 @@ pub fn model_cache_dir() -> std::path::PathBuf {
 }
 pub fn model_cache_key(model_uri: &str, file_sha: Option<&str>) -> String {
     if let Some(sha) = file_sha { format!("{model_uri}-{sha}") } else { model_uri.to_string() }
+}
+
+#[cfg(feature = "llm")]
+pub fn resolve_model_path(model_uri: &str) -> std::path::PathBuf {
+    // Parity with original: hf: prefix -> hf-hub download to cache (like resolveModelFile in llm.ts)
+    let api = Api::new().expect("hf-hub api");
+    if let Some(rest) = model_uri.strip_prefix("hf:") {
+        let parts: Vec<&str> = rest.splitn(3, '/').collect();
+        if parts.len() == 3 {
+            let repo = format!("{}/{}", parts[0], parts[1]);
+            let file = parts[2];
+            let repo_api = api.model(repo);
+            return repo_api.get(file).expect("download gguf");
+        }
+    }
+    std::path::PathBuf::from(model_uri)
 }
 
 pub struct LlamaCpp {

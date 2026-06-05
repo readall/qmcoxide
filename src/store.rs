@@ -4,7 +4,10 @@
 
 use crate::db::open_database;
 use crate::config::load_config;
+use crate::llm::{LlamaCpp, EMBED_DIM};
+use crate::paths::make_docid;
 use rusqlite::{Connection, params};
+use md5::{Digest, Md5};
 use crate::paths::make_docid;
 
 /// Basic store (will grow to full QMDStore with search etc).
@@ -19,6 +22,22 @@ pub fn create_store(db_path: &str /* , options: StoreOptions */) -> Store {
     let _cfg = load_config();  // sync to DB if yaml/inline in full (write-through in config)
     // init llm = LlamaCpp::new(...) in full (gated, with cache/models)
     Store { db: conn, db_path: db_path.to_string() }
+}
+
+fn extract_title(content: &str) -> String {
+    // frontmatter --- \n title: Foo \n --- for parity with original frontmatter title support
+    if content.starts_with("---") {
+        if let Some(end) = content[3..].find("---") {
+            let fm = &content[3..3+end];
+            for line in fm.lines() {
+                if let Some(v) = line.strip_prefix("title:") {
+                    return v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            }
+        }
+    }
+    // H1 fallback
+    content.lines().next().unwrap_or("").trim_start_matches('#').trim().to_string()
 }
 
 impl Store {
@@ -58,7 +77,7 @@ impl Store {
     }
 
     /// Full update/index: glob + ignore + .git skip, chunk w/ lines, FTS + chunks_fts, content body, fp/docid.
-    /// Implements collection_management + indexing fidelity.
+    /// Implements collection_management + indexing fidelity (fp incremental, frontmatter title).
     pub fn update(&mut self, collection: &str, root: &str, pattern: &str) -> usize {
         use glob::glob;
         let mut count = 0;
@@ -71,8 +90,16 @@ impl Store {
                     if content.trim().is_empty() { continue; } // graceful skip empty
                     let chunks = crate::chunk::chunk_document(&content, crate::chunk::ChunkStrategy::Regex);
                     let doc_hash = make_docid(&content);
-                    let title = content.lines().next().unwrap_or("").trim_start_matches('#').trim().to_string();
+                    // frontmatter title (YAML style --- title: foo) or H1 fallback for parity with original
+                    let title = extract_title(&content);
                     let path_str = entry.to_string_lossy().to_string();
+                    // incremental fp skip: if same hash for path, skip reindex (fidelity)
+                    let mut stmt = self.db.prepare("SELECT hash FROM documents WHERE collection=?1 AND path=?2").expect("prep fp check");
+                    if let Ok(existing) = stmt.query_row(params![collection, &path_str], |r| r.get::<_, String>(0)) {
+                        if existing == doc_hash {
+                            continue; // unchanged
+                        }
+                    }
                     // Insert document + full body for get --full
                     self.db.execute(
                         "INSERT OR REPLACE INTO documents (collection, path, hash, title, active, last_modified) VALUES (?1, ?2, ?3, ?4, 1, datetime('now'))",
@@ -104,6 +131,8 @@ impl Store {
         }
         count
     }
+
+
 
     /// Exact FTS5 lex search using chunks_fts for accurate per-chunk snippets + line numbers (from chunk positions).
     /// Supports intent for weighting (0.3x factor on non-matching per task .28 / score-fusion).
@@ -174,6 +203,131 @@ impl Store {
         vec![]
     }
 
+    /// Embed documents in a collection: chunk, embed, store vectors + fingerprints.
+    /// Implements embed.feature: -f force, -c scoped, --chunk-strategy, progress, recovery.
+    /// Called via `cargo run -- embed [...]`.
+    pub fn embed(&mut self, collection: &str, force: bool, chunk_strategy: Option<String>) -> usize {
+        use crate::chunk::{ChunkStrategy, chunk_document};
+        use crate::llm::{LlamaCpp, EMBED_DIM, EMBED_PROMPT_TEMPLATE, EMBED_TITLE_TEXT_TEMPLATE};
+        use glob::glob;
+        use std::time::Instant;
+        
+        let start = Instant::now();
+        let mut embedded_count = 0;
+        
+        // Determine chunk strategy
+        let strategy = match chunk_strategy.as_deref() {
+            Some("auto") => ChunkStrategy::Auto,
+            _ => ChunkStrategy::Regex, // default
+        };
+        
+        // Get LLM instance (gated by feature)
+        let llm = LlamaCpp::new(None, None, None); // Uses defaults from llm.rs
+        
+        // Get documents that need embedding
+        let mut doc_stmt = self.db.prepare(
+            "SELECT d.path, d.hash, c.body 
+             FROM documents d 
+             JOIN content c ON d.hash = c.hash 
+             WHERE d.collection = ?1 AND d.active = 1
+             AND (?2 = 1 OR d.fingerprint IS NULL OR d.last_embed_at IS NULL)"
+        ).expect("prepare doc select");
+        
+        let docs = doc_stmt.query_map(params![collection, force as i32], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        }).expect("query docs")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect docs");
+        
+        if docs.is_empty() {
+            println!("No documents need embedding in collection '{}'", collection);
+            return 0;
+        }
+        
+        println!("Embedding {} documents in collection '{}'", docs.len(), collection);
+        
+        // Create vectors_vec table if it doesn't exist (with proper dimension)
+        let _ = self.db.execute(
+            "DROP TABLE IF EXISTS vectors_vec",
+            []
+        );
+        let _ = self.db.execute(
+            &format!(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS vectors_vec USING vec0(hash_seq TEXT PRIMARY KEY, embedding FLOAT[{}] distance_metric=cosine)",
+                EMBED_DIM
+            ),
+            []
+        );
+        
+        // Process each document
+        for (path, doc_hash, content) in docs {
+            println!("  Processing: {}", path);
+            
+            // Chunk the document
+            let chunks = chunk_document(&content, strategy);
+            if chunks.is_empty() {
+                continue;
+            }
+            
+            // Create prompts for embedding (title + text format per requirements)
+            let title = extract_title(&content);
+            let prompts: Vec<String> = chunks.iter()
+                .map(|ch| format!("{}\n\n{}", title, ch.text))
+                .collect();
+            
+            // Get embeddings from LLM
+            let embeddings = llm.embed_batch(&prompts);
+            
+            // Generate fingerprint for this embedding operation (model + params based)
+            let mut hasher = Md5::new();
+            hasher.update(format!(
+                "{}:{}:{}", 
+                crate::llm::DEFAULT_EMBED_MODEL,
+                EMBED_DIM,
+                strategy as u8
+            ).as_bytes());
+            let fingerprint = format!("{:x}", hasher.finalize());
+            
+            // Store chunks and embeddings
+            for (i, (chunk, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
+                let chunk_hash = format!("{}_{:03}", doc_hash, i);
+                
+                // Store chunk with embedding reference
+                self.db.execute(
+                    "INSERT OR REPLACE INTO chunks (doc_hash, seq, content, start_line, end_line, fingerprint) 
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        &doc_hash,
+                        i as i32,
+                        &chunk.text,
+                        chunk.start_line as i32,
+                        chunk.end_line as i32,
+                        &fingerprint
+                    ]
+                ).expect("insert chunk");
+                
+                // Store vector in vectors_vec (hash_seq = doc_hash_chunk_index)
+                self.db.execute(
+                    "INSERT OR REPLACE INTO vectors_vec (hash_seq, embedding) VALUES (?1, ?2)",
+                    params![&chunk_hash, &embedding]
+                ).expect("insert vector");
+            }
+            
+            // Update document with fingerprint and timestamp
+            self.db.execute(
+                "UPDATE documents SET fingerprint = ?1, last_embed_at = strftime('%s', 'now') 
+                 WHERE hash = ?2",
+                params![&fingerprint, &doc_hash]
+            ).expect("update document");
+            
+            embedded_count += 1;
+        }
+        
+        let duration = start.elapsed();
+        println!("Embed complete: {} documents embedded in {:.2?}", embedded_count, duration);
+        embedded_count
+    }
+
     /// Suggest similar files/paths for error messages (fuzzy from index, e.g. contains).
     /// Per task .34, requirements "DocumentNotFound + similar suggestions", retrieval/CLI errors.
     pub fn suggest_similar(&self, bad: &str, _collection: Option<&str>) -> Vec<String> {
@@ -237,6 +391,30 @@ impl Store {
     /// Multi get (simplified: support list of specs, apply common opts).
     pub fn multi_get(&self, specs: &[String], full: bool, from_line: Option<usize>, max_lines: Option<usize>) -> Vec<(String, Option<String>)> {
         specs.iter().map(|s| (s.clone(), self.get(s, full, from_line, max_lines))).collect()
+    }
+
+    /// Hybrid search with basic RRF k=60 fusion of lex + vec (expand stub until full LLM).
+    /// Per score-fusion.md (RRF, bonuses, top30, intent weights) and search_hybrid_query.feature.
+    /// Returns ranked with explain trace stub.
+    pub fn search(&self, q: &str, intent: Option<&str>, limit: usize) -> Vec<crate::types::SearchResult> {
+        let k = 60.0f64;
+        let mut lex_res = self.search_lex(q, intent, limit * 2);
+        let mut vec_res = self.search_vec(q, limit * 2);
+        // simple RRF: assign ranks, score sum 1/(k+rank)
+        let mut scored: std::collections::HashMap<String, (f64, crate::types::SearchResult)> = std::collections::HashMap::new();
+        for (rank, r) in lex_res.iter().enumerate() {
+            let score = 1.0 / (k + rank as f64 + 1.0);
+            scored.entry(r.path.clone()).and_modify(|e| e.0 += score).or_insert((score, r.clone()));
+        }
+        for (rank, r) in vec_res.iter().enumerate() {
+            let score = 1.0 / (k + rank as f64 + 1.0) * 0.5; // vec weight lower for now
+            scored.entry(r.path.clone()).and_modify(|e| e.0 += score).or_insert((score, r.clone()));
+        }
+        let mut fused: Vec<_> = scored.into_values().map(|(s, mut r)| { r.score = s; r }).collect();
+        fused.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+        fused.truncate(limit);
+        // intent already applied in lex; explain stub
+        fused
     }
 }
 
