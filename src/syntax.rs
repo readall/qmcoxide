@@ -136,6 +136,7 @@ vec: how to improve page load times"#;
 lex: auth -oauth -saml"#;
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
+            eprintln!("DEBUG lex len={} : {:?}", lex.len(), lex);
             assert!(matches!(&lex[0], LexTerm::Phrase(s) if s == "machine learning"));
             assert!(matches!(&lex[1], LexTerm::NegPhrase(s) if s == "deep learning"));
             assert!(matches!(&lex[2], LexTerm::Word(s) if s == "auth"));
