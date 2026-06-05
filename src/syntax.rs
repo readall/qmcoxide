@@ -35,7 +35,7 @@ fn lex_term_re() -> &'static Regex {
     LEX_TERM_RE.get_or_init(|| {
         let d = char::from(34u8);
         let bs = char::from(92u8);
-        let pat = format!("(-?{}[^{}]*{}|-?{}+)", d, d, d, bs.to_string() + "S");
+        let s = bs.to_string() + "S"; let pat = format!("(-?{d}[^{d}]*{d}|-?{s}+)");
         Regex::new(&pat).unwrap()
     })
 }
@@ -43,7 +43,7 @@ fn lex_term_re() -> &'static Regex {
 fn quoted_re() -> &'static Regex {
     QUOTED_RE.get_or_init(|| {
         let d = char::from(34u8);
-        let pat = format!("{}([^{}]*){}", d, d, d);
+        let pat = format!("{d}([^{d}]*){d}");
         Regex::new(&pat).unwrap()
     })
 }
@@ -95,7 +95,7 @@ pub fn parse_query(input: &str) -> Result<Query, String> {
                     // parse lex terms: words, "phrase", -neg, -"neg phrase"
                     for cap in lex_term_re().find_iter(rest) {
                         let t = cap.as_str();
-                        let neg_d = format!("-{}", d);
+                        let neg_d = format!("-{d}");
                         if t.starts_with(&neg_d) {
                             if let Some(m) = quoted_re().captures(t) {
                                 lex.push(LexTerm::NegPhrase(m[1].to_string()));
@@ -151,7 +151,7 @@ vec: how to improve page load times"#;
     #[test]
     fn test_lex_negation_and_phrase() {
         let quote = char::from(34u8);
-        let q_ = format!("lex: {}machine learning{} -{}deep learning{}\nlex: auth -oauth -saml", quote, quote, quote, quote);
+        let q_ = format!("lex: {quote}machine learning{quote} -{quote}deep learning{quote}\nlex: auth -oauth -saml");
         let q = q_.as_str();
         let parsed = parse_query(q).unwrap();
         if let Query::Structured { lex, .. } = parsed {
@@ -167,7 +167,7 @@ vec: how to improve page load times"#;
     fn test_full_from_syntax_md() {
         // examples from SYNTAX.md
         let quote = char::from(34u8);
-        let q = format!("lex: CAP theorem consistency\nlex: {}machine learning{} -{}deep learning{}", quote, quote, quote, quote);
+        let q = format!("lex: CAP theorem consistency\nlex: {quote}machine learning{quote} -{quote}deep learning{quote}");
         let _ = parse_query(q.as_str()).unwrap();
         let q2 = "vec: how does the rate limiter handle burst traffic";
         let _ = parse_query(q2).unwrap();
